@@ -1,0 +1,19 @@
+{
+  "name": "coderband",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "serve . -l 3000",
+    "build": "echo 'static site, nothing to build'",
+    "start": "serve . -l 3000"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "stripe": "^16.0.0",
+    "@stripe/stripe-js": "^4.0.0",
+    "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "serve": "^14.2.0"
+  }
+}
