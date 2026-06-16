@@ -143,6 +143,7 @@ function StemMixer({ song, instrument, vols, setVol }){
 function AffiliateRail({ instrument, layout, onClick }){
   const { t } = window.useT();
   const items = window.getAffiliates(instrument);
+  if(!items.length) return null;
   return (
     <aside className="aff-rail">
       <div className="aff-head">

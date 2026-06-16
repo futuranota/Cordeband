@@ -2,7 +2,7 @@
    Login simple + gestión de productos de afiliado (imagen, título, precio, URL). */
 
 const ADMIN_LS = "cordeband_admin_v1";
-const ADMIN_EMAIL = "you@gmail.com";
+const ADMIN_EMAIL = "xapplex65@gmail.com";
 
 function adminIsAuthed(){
   try { return localStorage.getItem(ADMIN_LS) === "1"; } catch(e){ return false; }

@@ -197,8 +197,7 @@ function saveAdminAffiliates(list){
 function getAffiliates(instrument){
   const admin = loadAdminAffiliates().filter(a => a.active !== false);
   const matched = admin.filter(a => a.instrument === instrument || a.instrument === "all");
-  if(matched.length) return matched;
-  return AFFILIATES[instrument] || AFFILIATES.guitar;
+  return matched;
 }
 
 Object.assign(window, {
