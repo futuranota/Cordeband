@@ -144,6 +144,7 @@ function StepCard({ n, title, body, Icon }) {
 
 function PriceCard({ tier, go }) {
   const { t } = window.useT();
+  const [open, setOpen] = React.useState(false);
   const D = {
     free: { label: t("common.free"), amount: "$0", per: false, feats: t("price.freeFeat"), forr: t("price.forFree"), cta: t("price.ctaFree"), btn: "btn-ghost" },
     pro: { label: "BASIC", amount: "$9.99", per: true, feats: t("price.proFeat"), forr: t("price.forPro"), cta: t("price.ctaPro"), btn: "btn-primary" },
@@ -152,28 +153,38 @@ function PriceCard({ tier, go }) {
   const d = D[tier];
   const hot = tier === "banda";
   return (
-    <div className={"card price" + (hot ? " pro" : "")} style={{ ...(hot ? null : { borderColor: "rgba(0, 0, 0, 0.44)" }), borderColor: "rgba(69, 9, 9, 0.44)" }}>
+    <div className={"card price" + (hot ? " pro" : "")} style={{ borderColor: "rgba(69,9,9,0.44)" }}>
       {hot && <span className="price-pop"><window.IconSpark size={12} /> {t("price.popular")}</span>}
       <div className="row spread" style={{ alignItems: "flex-start" }}>
         <div>
-          <div className="eyebrow" style={{ color: "rgb(255, 255, 255)" }}>{d.label}</div>
+          <div className="eyebrow" style={{ color: "rgb(255,255,255)" }}>{d.label}</div>
           <div className="row" style={{ alignItems: "flex-end", gap: 6, marginTop: 10 }}>
             <span className="amount">{d.amount}</span>
             {d.per && <span style={{ marginBottom: 8, color: "var(--text-3)", fontSize: 14 }}>{t("common.perMonth")}</span>}
           </div>
           <div className="price-for">{d.forr}</div>
         </div>
-        {tier === "pro" && <span className="badge-pro" style={{ backgroundColor: "rgb(255, 255, 255)" }}><window.IconCrown size={12} sw={1.8} /> BASIC</span>}
+        {tier === "pro" && <span className="badge-pro" style={{ backgroundColor: "rgb(255,255,255)" }}><window.IconCrown size={12} sw={1.8} /> BASIC</span>}
         {tier === "banda" && <span className="badge-pro badge-band"><window.IconBand size={12} sw={1.8} /> Banda</span>}
       </div>
-      <ul>
-        {d.feats.map((f, i) => <li key={i}><window.IconCheck size={16} sw={2} /> {f}</li>)}
-      </ul>
+
+      <button className="price-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        {open ? t("price.hideFeats") : t("price.showFeats")}
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transition:"transform .2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <ul style={{ marginTop: 12 }}>
+          {d.feats.map((f, i) => <li key={i}><window.IconCheck size={16} sw={2} /> {f}</li>)}
+        </ul>
+      )}
+
       <div className="price-cta">
-        <button className={"btn btn-block " + d.btn} onClick={() => go("signup")} style={{ borderWidth: "2px", borderColor: "rgba(131, 131, 131, 0)", backgroundColor: "rgba(255, 255, 255, 0)", color: "rgb(255, 255, 255)" }}>{tier === "pro" ? <span style={{ color: "#ffffff" }}>{d.cta}</span> : d.cta}</button>
+        <button className={"btn btn-block " + d.btn} onClick={() => go("signup")} style={{ borderWidth: "2px", borderColor: "rgba(131,131,131,0)", backgroundColor: "rgba(255,255,255,0)", color: "rgb(255,255,255)" }}>{tier === "pro" ? <span style={{ color: "#ffffff" }}>{d.cta}</span> : d.cta}</button>
       </div>
     </div>);
-
 }
 
 /* ---------- Sección: comparte con tu banda ---------- */
@@ -332,30 +343,30 @@ function LandingScreen({ go, t: tw }) {
 
 }
 
-const TESTIMONIALS = [
-  { quote: "Cordeband cambió por completo cómo practico con mi banda. Subimos la canción, cada quien elige su instrumento y listo — sin mezclas raras ni MP3 cortados a mano. Es exactamente lo que necesitábamos.", name: "Sofía R.", role: "Guitarrista, Madrid" },
-  { quote: "Llevo años buscando algo así. La partitura sincronizada con el audio es una pasada; ya no pierdo el compás aunque esté tocando solo. El modo banda es lo mejor para los ensayos a distancia.", name: "Carlos M.", role: "Bajista, Ciudad de México" },
-  { quote: "Usamos Cordeband para preparar conciertos escolares. En minutos tenemos las pistas separadas para cada alumno. Les encanta poder practicar su parte sin escuchar a los demás instrumentos encima.", name: "Ana P.", role: "Profesora de música, Buenos Aires" },
-];
-
 function TestimonialSection() {
+  const { t } = window.useT();
+  const items = [
+    { q: t("testimonials.q1"), n: t("testimonials.n1"), r: t("testimonials.r1") },
+    { q: t("testimonials.q2"), n: t("testimonials.n2"), r: t("testimonials.r2") },
+    { q: t("testimonials.q3"), n: t("testimonials.n3"), r: t("testimonials.r3") },
+  ];
   return (
     <section className="wrap section" id="testimonials">
       <div className="section-head">
-        <span className="eyebrow">Músicos que ya practican con Cordeband</span>
-        <h2 className="h2" style={{ marginTop: 14 }}>Lo que dicen nuestros usuarios</h2>
+        <span className="eyebrow">{t("testimonials.eyebrow")}</span>
+        <h2 className="h2" style={{ marginTop: 14 }}>{t("testimonials.title")}</h2>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:20, marginTop:40 }}>
-        {TESTIMONIALS.map((t, i) => (
+        {items.map((item, i) => (
           <div key={i} className="card" style={{ padding:"28px 28px 24px", borderLeft:"3px solid var(--acc)", display:"flex", flexDirection:"column", gap:16 }}>
-            <p style={{ fontSize:15, lineHeight:1.65, color:"var(--text-2)", margin:0 }}>"{t.quote}"</p>
+            <p style={{ fontSize:15, lineHeight:1.65, color:"var(--text-2)", margin:0 }}>"{item.q}"</p>
             <footer style={{ display:"flex", alignItems:"center", gap:10, marginTop:"auto" }}>
               <span style={{ width:34, height:34, borderRadius:"50%", background:"var(--acc-soft)", border:"1px solid var(--acc-line)", display:"grid", placeItems:"center", fontSize:15, fontWeight:700, color:"var(--acc)" }}>
-                {t.name[0]}
+                {item.n[0]}
               </span>
               <div>
-                <div style={{ fontWeight:700, fontSize:13.5, color:"#fff" }}>{t.name}</div>
-                <div style={{ fontSize:12, color:"var(--text-4)" }}>{t.role}</div>
+                <div style={{ fontWeight:700, fontSize:13.5, color:"#fff" }}>{item.n}</div>
+                <div style={{ fontSize:12, color:"var(--text-4)" }}>{item.r}</div>
               </div>
             </footer>
           </div>

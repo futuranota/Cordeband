@@ -23,6 +23,13 @@ const STR = {
       s2t: "Elige tu instrumento", s2b: "Guitarra, piano, bajo, batería o voz. Quitamos ese instrumento de la mezcla para que lo toques tú.",
       s3t: "Toca con la partitura", s3b: "La partitura avanza sola, sincronizada al audio. Ajusta tempo y repite las partes difíciles en loop." },
     instSec: { eyebrow: "Instrumentos soportados", title: "El modelo de 6 stems separa cada instrumento por su cuenta." },
+    testimonials: { eyebrow: "Músicos que ya practican con Cordeband", title: "Lo que dicen nuestros usuarios",
+      q1: "Cordeband cambió por completo cómo practico con mi banda. Subimos la canción, cada quien elige su instrumento y listo — sin mezclas raras ni MP3 cortados a mano. Es exactamente lo que necesitábamos.",
+      n1: "Sofía R.", r1: "Guitarrista, Madrid",
+      q2: "Llevo años buscando algo así. La partitura sincronizada con el audio es una pasada; ya no pierdo el compás aunque esté tocando solo. El modo banda es lo mejor para los ensayos a distancia.",
+      n2: "Carlos M.", r2: "Bajista, Ciudad de México",
+      q3: "Usamos Cordeband para preparar conciertos escolares. En minutos tenemos las pistas separadas para cada alumno. Les encanta poder practicar su parte sin escuchar a los demás instrumentos encima.",
+      n3: "Ana P.", r3: "Profesora de música, Buenos Aires" },
     band: { eyebrow: "Toca en equipo", title: "Comparte el link con tu banda. Cada quien elige su instrumento.",
       sub: "Un solo link abre la misma canción para todo el grupo. Cada músico reclama su parte, Cordeband le quita su instrumento de la mezcla, y todos practican lo mismo — juntos o por su cuenta.",
       linkLabel: "Link de la sesión", copy: "Copiar", copied: "¡Copiado!",
@@ -36,9 +43,10 @@ const STR = {
       bandaFeat: ["Todo lo de Pro", "Sala de banda en tiempo real", "Invitados ilimitados", "Play sincronizado para todos", "Invitados entran solo con su nombre"],
       forFree: "Para probar", forPro: "Para el músico activo", forBanda: "Para tocar en grupo",
       popular: "Más popular",
-      ctaFree: "Empezar gratis", ctaPro: "Mejorar a Pro", ctaBanda: "Activar Banda" },
-    auth: { eyebrow: "Crear cuenta", title: "Crea tu cuenta gratis para descargar tu MP3.",
-      sub: "Necesitas una cuenta para procesar canciones y descargar la pista sin tu instrumento. Sin tarjeta.",
+      ctaFree: "Empezar gratis", ctaPro: "Mejorar a Pro", ctaBanda: "Activar Banda",
+      showFeats: "Ver detalles", hideFeats: "Ocultar detalles" },
+    auth: { eyebrow: "Crear cuenta", title: "Tu música, a tu manera. Crea tu cuenta con nosotros.",
+      sub: "Sube cualquier canción, elimina tu instrumento en segundos y genera la pista perfecta para comenzar a ensayar.",
       name: "Nombre", namePh: "Tu nombre", email: "Correo", emailPh: "tú@correo.com",
       pass: "Contraseña", passPh: "Mínimo 8 caracteres",
       create: "Crear cuenta y continuar", or: "o continúa con",
@@ -160,6 +168,13 @@ const STR = {
       s2t: "Pick your instrument", s2b: "Guitar, piano, bass, drums or vocals. We remove that instrument from the mix so you play it.",
       s3t: "Play with the score", s3b: "The score scrolls itself, synced to the audio. Adjust tempo and loop the hard parts." },
     instSec: { eyebrow: "Supported instruments", title: "The 6-stem model separates each instrument on its own." },
+    testimonials: { eyebrow: "Musicians already practicing with Cordeband", title: "What our users say",
+      q1: "Cordeband completely changed how I practice with my band. We upload the song, everyone picks their instrument and that's it — no weird mixes or manually cut MP3s. It's exactly what we needed.",
+      n1: "Sofía R.", r1: "Guitarist, Madrid",
+      q2: "I've been looking for something like this for years. The score synced to the audio is incredible; I never lose the beat even when practicing alone. Band mode is the best thing for remote rehearsals.",
+      n2: "Carlos M.", r2: "Bassist, Mexico City",
+      q3: "We use Cordeband to prepare school concerts. In minutes we have the separate tracks for each student. They love being able to practice their part without hearing the other instruments on top.",
+      n3: "Ana P.", r3: "Music teacher, Buenos Aires" },
     band: { eyebrow: "Play as a team", title: "Share the link with your band. Everyone picks their instrument.",
       sub: "One link opens the same song for the whole group. Each musician claims their part, Cordeband pulls their instrument from the mix, and everyone practices the same thing — together or on their own.",
       linkLabel: "Session link", copy: "Copy", copied: "Copied!",
@@ -173,9 +188,10 @@ const STR = {
       bandaFeat: ["Everything in Pro", "Real-time band room", "Unlimited guests", "Synced Play for everyone", "Guests join with just their name"],
       forFree: "To try it", forPro: "For the active musician", forBanda: "To play as a group",
       popular: "Most popular",
-      ctaFree: "Start free", ctaPro: "Upgrade to Pro", ctaBanda: "Get Band" },
-    auth: { eyebrow: "Create account", title: "Create your free account to download your MP3.",
-      sub: "You need an account to process songs and download the track without your instrument. No card.",
+      ctaFree: "Start free", ctaPro: "Upgrade to Pro", ctaBanda: "Get Band",
+      showFeats: "See details", hideFeats: "Hide details" },
+    auth: { eyebrow: "Create account", title: "Your music, your way. Create your account with us.",
+      sub: "Upload any song, remove your instrument in seconds and generate the perfect track to start rehearsing.",
       name: "Name", namePh: "Your name", email: "Email", emailPh: "you@email.com",
       pass: "Password", passPh: "At least 8 characters",
       create: "Create account & continue", or: "or continue with",
@@ -300,12 +316,18 @@ function LangProvider({ lang, setLang, children }) {
 
 function LangToggle() {
   const { lang, setLang } = useT();
+  const isEN = lang === "en";
   return (
-    <div className="lang-toggle" role="group" aria-label="Idioma / Language">
-      <button className={lang === "es" ? "on" : ""} onClick={() => setLang("es")} style={{ backgroundColor: "rgba(77, 159, 255, 0)", color: "rgb(255, 255, 255)" }}>ES</button>
-      <button className={lang === "en" ? "on" : ""} onClick={() => setLang("en")} style={{ backgroundColor: "rgba(194, 194, 194, 0)" }}>EN</button>
-    </div>);
-
+    <button
+      className="lang-switch"
+      onClick={() => setLang(isEN ? "es" : "en")}
+      aria-label="Cambiar idioma / Switch language"
+    >
+      <span className="lang-switch-thumb" style={{ transform: isEN ? "translateX(36px)" : "translateX(2px)" }} />
+      <span className="lang-switch-label" style={{ opacity: isEN ? 0.38 : 1, color: "#fff" }}>ES</span>
+      <span className="lang-switch-label" style={{ opacity: isEN ? 1 : 0.38, color: "#fff" }}>EN</span>
+    </button>
+  );
 }
 
 Object.assign(window, { LangCtx, useT, LangProvider, LangToggle, STR });

@@ -129,7 +129,7 @@ function DashboardScreen({ go, library, plan, planLimit, used, onOpen, onAddAtte
               <div className="meter"><i style={{ width:`${pct}%` }}/></div>
             </div>
           )}
-          <button className="btn btn-primary btn-sm" onClick={onAddAttempt}>
+          <button className="btn btn-primary btn-sm" onClick={onAddAttempt} style={{ color:"#0a0a0a" }}>
             <window.IconPlus size={15}/> {t("dash.add")}
           </button>
         </div>

@@ -43,7 +43,7 @@ function SignupScreen({ go, mode = "signup", onComplete }) {
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={!valid} style={{ marginTop: 8 }}>
+          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={!valid} style={{ marginTop: 8, backgroundColor:"#fff", color:"#0a0a0a" }}>
             {isLogin ? t("nav.login") : t("auth.create")} <window.IconArrow size={17} />
           </button>
 

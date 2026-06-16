@@ -236,17 +236,27 @@ body{
 .logo-word{ font-family:var(--display); font-weight:800; font-size:21px; letter-spacing:-0.02em; color:#fff; }
 
 /* Language toggle */
-.lang-toggle{
-  display:inline-flex; align-items:center; padding:3px;
-  background:var(--elev-2); border:1px solid var(--line); border-radius:999px;
+/* Lang switch (sliding thumb) */
+.lang-switch{
+  position:relative; display:inline-flex; align-items:center;
+  width:76px; height:34px; border-radius:999px;
+  background:var(--elev-2); border:1px solid var(--line);
+  padding:0; cursor:pointer; -webkit-appearance:none; appearance:none;
+  transition:border-color .15s;
 }
-.lang-toggle button{
-  -webkit-appearance:none; appearance:none; border:none; background:transparent;
-  font-family:var(--sans); font-size:12px; font-weight:700; color:var(--text-3);
-  padding:5px 11px; border-radius:999px; cursor:pointer; transition:all .15s ease;
+.lang-switch:hover{ border-color:var(--acc-line); }
+.lang-switch-thumb{
+  position:absolute; top:3px;
+  width:32px; height:26px; border-radius:999px;
+  background:var(--elev-3); box-shadow:0 1px 4px rgba(0,0,0,.4);
+  transition:transform .2s cubic-bezier(.4,0,.2,1);
+  pointer-events:none;
 }
-.lang-toggle button:hover{ color:#fff; }
-.lang-toggle button.on{ background:var(--acc); color:var(--acc-ink); }
+.lang-switch-label{
+  position:relative; z-index:1; flex:1; text-align:center;
+  font-family:var(--sans); font-size:12px; font-weight:700;
+  transition:opacity .2s ease; pointer-events:none; line-height:1;
+}
 
 .avatar{
   width:34px; height:34px; border-radius:999px;
@@ -380,10 +390,17 @@ body{
 .price{ padding:36px 32px; display:flex; flex-direction:column; background:var(--elev); }
 .price.pro{ background:linear-gradient(165deg, #143a4d, #0e2230); border-color:var(--acc-line); }
 .price .amount{ font-family:var(--display); font-size:52px; font-weight:800; line-height:1; color:#fff; }
-.price ul{ list-style:none; padding:0; margin:24px 0 0; display:flex; flex-direction:column; gap:13px; }
+.price ul{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:13px; }
 .price li{ display:flex; gap:10px; align-items:flex-start; font-size:14px; color:var(--text-2); }
 .price li svg{ width:16px; height:16px; flex:0 0 auto; margin-top:1px; color:var(--acc); }
-.price .price-cta{ margin-top:auto; padding-top:28px; }
+.price .price-cta{ margin-top:auto; padding-top:20px; }
+.price-toggle{
+  display:inline-flex; align-items:center; gap:6px; margin-top:16px;
+  background:none; border:none; padding:0; cursor:pointer;
+  font-family:var(--sans); font-size:12px; font-weight:600;
+  color:var(--text-3); transition:color .15s;
+}
+.price-toggle:hover{ color:var(--acc); }
 
 /* ============================================================
    BAND SHARE (landing) — comparte con tu banda
