@@ -215,6 +215,15 @@ export function SignupForm({ mode }: { mode: Mode }) {
                 {showPass ? <IconMute size={17} /> : <IconVolume size={17} />}
               </button>
             </div>
+            {isLogin && (
+              <Link
+                href="/forgot-password"
+                className="auth-link"
+                style={{ fontSize: 13, display: 'inline-block', marginTop: 10 }}
+              >
+                {t('auth.forgotPassword')}
+              </Link>
+            )}
           </div>
 
           {error && (

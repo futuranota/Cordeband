@@ -9,6 +9,10 @@ const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope', displa
 export const metadata: Metadata = {
   title: 'Cordeband — El karaoke para músicos',
   description: 'Sube cualquier canción, quitamos tu instrumento de la mezcla y te damos la partitura sincronizada. Tú solo tocas.',
+  icons: {
+    icon: '/assets/Corderband-logo.svg',
+    shortcut: '/assets/Corderband-logo.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
