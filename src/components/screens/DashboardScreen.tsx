@@ -4,87 +4,193 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
-import { LIBRARY, publishedFeatured, stemsExpired, stemsMsLeft, INSTRUMENTS, type Song } from '@/lib/data';
-import { IconPlus, IconCrown } from '@/components/ui/icons';
+import {
+  LIBRARY, publishedFeatured, stemsExpired, stemsMsLeft,
+  INSTRUMENTS, type Song, type InstrumentKey,
+} from '@/lib/data';
+import { monthlySongLimit, type PlanId } from '@/lib/plans';
+import {
+  IconPlus, IconCrown, IconBand, IconUpload, IconCheck,
+  IconClock, IconNote, IconSpark, IconPlay,
+} from '@/components/ui/icons';
 
-function fmtStemsLeft(ms: number, t: (k: string) => string): string {
-  if (ms <= 0) return t('dash.stemsExpired');
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  if (h > 0) return `${t('dash.stemsFor')} ${h} ${h === 1 ? t('dash.hour') : t('dash.hours')} ${t('dash.more')}`;
-  return `${t('dash.stemsFor')} ${m} ${t('dash.minutes')} ${t('dash.more')}`;
+function useStemsTick() {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => force((n) => n + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
 }
 
-function SongCard({ song, onOpen }: { song: Song; onOpen: () => void }) {
+function StemsStatus({ song, compact }: { song: Song; compact?: boolean }) {
   const { t } = useT();
+  useStemsTick();
+  const ms = stemsMsLeft(song);
+  if (ms <= 0) {
+    return (
+      <span className="stems-pill expired">
+        <IconClock size={12} /> {t('dash.stemsExpired')}
+      </span>
+    );
+  }
+  const hours = ms / 3600000;
+  let value: string;
+  if (hours >= 1) {
+    const h = Math.floor(hours);
+    value = `${h} ${h === 1 ? t('dash.hour') : t('dash.hours')}`;
+  } else {
+    value = `${Math.max(1, Math.round(hours * 60))} ${t('dash.minutes')}`;
+  }
+  const low = hours < 6;
+  if (compact) return <span className={`stems-pill${low ? ' low' : ''}`}><IconClock size={12} /> {value}</span>;
+  return (
+    <span className={`stems-pill${low ? ' low' : ''}`}>
+      <IconClock size={12} /> {t('dash.stemsFor')} {value} {t('dash.more')}
+    </span>
+  );
+}
+
+function SongCard({ song, onOpen }: { song: Song; onOpen: (song: Song) => void }) {
+  const { t } = useT();
+  useStemsTick();
   const expired = stemsExpired(song);
-  const msLeft = stemsMsLeft(song);
 
   return (
-    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 10, flexShrink: 0,
-          background: 'var(--acc-soft)', border: '1px solid var(--acc-line)',
-          display: 'grid', placeItems: 'center', fontSize: 22,
-        }}>{song.glyph}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</p>
-          <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>{song.artist}</p>
-        </div>
-      </div>
-
-      {/* Instruments */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {song.instruments.map(k => {
-          const { Icon } = INSTRUMENTS[k];
-          return (
-            <div key={k} className="pill" style={{ fontSize: 11, padding: '4px 8px' }}>
-              <Icon size={11} /> {k}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Stems status */}
-      <div style={{ fontSize: 12, color: expired ? 'var(--text-3)' : msLeft < 6 * 3600000 ? '#f59e0b' : 'var(--text-3)' }}>
-        {expired ? t('dash.stemsExpired') : fmtStemsLeft(msLeft, t)}
-      </div>
-
-      <div style={{ display: 'flex', gap: 8 }}>
-        {!expired ? (
-          <button className="btn btn-primary btn-sm" onClick={onOpen}>{t('dash.play')}</button>
+    <div className={`card song-card${expired ? ' expired' : ''}`} onClick={() => onOpen(song)}>
+      <div className="song-cover">
+        <span className="cover-glyph">{song.glyph}</span>
+        {expired ? (
+          <span className="cover-tag warn"><IconUpload size={11} /> {t('dash.stemsExpired')}</span>
         ) : (
-          <Link href="/upload" className="btn btn-ghost btn-sm">{t('dash.reactivateShort')}</Link>
+          <span className="cover-tag">{t('dash.eyebrow')}</span>
         )}
+        {expired && (
+          <div className="cover-regen">
+            <span className="regen-ico"><IconUpload size={18} /></span>
+          </div>
+        )}
+      </div>
+      <div className="song-body">
+        <div>
+          <div className="song-title">{song.title}</div>
+          <div className="song-artist">{song.artist}</div>
+        </div>
+        <div className="song-insts">
+          {song.instruments.slice(0, 4).map((k) => {
+            const { Icon } = INSTRUMENTS[k];
+            return (
+              <span key={k} className="pill" style={{ padding: '4px 9px', fontSize: 11 }}>
+                <Icon size={12} sw={1.5} /> {t(`inst.${k}`)}
+              </span>
+            );
+          })}
+        </div>
+        <div className="song-foot">
+          <StemsStatus song={song} />
+          {expired && (
+            <button type="button" className="btn btn-primary btn-sm song-cta" onClick={(e) => { e.stopPropagation(); onOpen(song); }}>
+              <IconUpload size={14} /> {t('dash.reactivateShort')}
+            </button>
+          )}
+        </div>
+        <div className="song-scoresafe"><IconCheck size={12} sw={2.2} /> {t('dash.scoreSafe')}</div>
       </div>
     </div>
   );
 }
 
-function FeaturedCard({ song }: { song: Song }) {
+function EmptyLibrary() {
   const { t } = useT();
   return (
-    <div className="card" style={{ padding: 20 }}>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 8, flexShrink: 0,
-          background: 'var(--acc-soft)', border: '1px solid var(--acc-line)',
-          display: 'grid', placeItems: 'center', fontSize: 18,
-        }}>{song.glyph}</div>
-        <div>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{song.title}</p>
-          <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>{song.artist}</p>
-        </div>
-        <span className="badge-pro" style={{ marginLeft: 'auto', fontSize: 9 }}>{t('dash.featBadge')}</span>
+    <div className="empty page">
+      <div className="empty-art"><IconNote size={40} sw={1.4} /></div>
+      <h1 className="h1" style={{ fontSize: 'clamp(30px,4vw,42px)' }}>{t('dash.emptyTitle')}</h1>
+      <p className="lead" style={{ margin: '18px auto 0', maxWidth: '46ch' }}>{t('dash.emptySub')}</p>
+      <div className="row center gap-12" style={{ marginTop: 30 }}>
+        <Link href="/upload" className="btn btn-primary btn-lg">
+          <IconPlus size={16} /> {t('dash.uploadFirst')}
+        </Link>
       </div>
-      <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
-        <span>{song.bpm} BPM</span>
-        <span>·</span>
-        <span>{song.keySig}</span>
+      <div className="row center gap-24" style={{ marginTop: 34, color: 'var(--text-4)', fontSize: 13 }}>
+        <span className="row gap-8"><IconUpload size={15} /> {t('dash.formats')}</span>
+        <span className="row gap-8"><IconClock size={15} /> {t('dash.readyIn')}</span>
       </div>
-      <Link href="/instrument" className="btn btn-ghost btn-sm btn-block">{t('dash.play')}</Link>
     </div>
+  );
+}
+
+function FeaturedSongCard({ song, onOpen }: { song: Song; onOpen: () => void }) {
+  const { t } = useT();
+  return (
+    <div className="card feat-card" onClick={onOpen}>
+      <div className="feat-cover">
+        <span className="feat-badge"><IconSpark size={11} /> {t('dash.featBadge')}</span>
+        <span className="feat-glyph">{song.glyph}</span>
+        <span className="feat-play"><IconPlay size={16} /></span>
+      </div>
+      <div className="feat-body">
+        <div className="feat-title">{song.title}</div>
+        <div className="feat-artist">{song.artist}</div>
+        <div className="feat-meta">
+          <span>{song.bpm} BPM</span>
+          <span>·</span>
+          <span>{song.keySig}</span>
+          <span className="feat-insts">
+            {song.instruments.slice(0, 3).map((k) => {
+              const { Icon } = INSTRUMENTS[k];
+              return <Icon key={k} size={12} sw={1.5} />;
+            })}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeaturedSection({ items, onOpen }: { items: Song[]; onOpen: (song: Song) => void }) {
+  const { t } = useT();
+  return (
+    <section className="dash-section">
+      <div className="dash-sec-head">
+        <div>
+          <div className="row gap-8">
+            <span className="dash-sec-icon"><IconSpark size={16} /></span>
+            <div className="dash-sec-title">{t('dash.featTitle')}</div>
+          </div>
+          <div className="dash-sec-sub">{t('dash.featSub')}</div>
+        </div>
+      </div>
+      <div className="feat-grid">
+        {items.map((s) => (
+          <FeaturedSongCard key={s.id} song={s} onOpen={() => onOpen(s)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BandsSection() {
+  const { t } = useT();
+  return (
+    <section className="dash-section">
+      <div className="dash-sec-head">
+        <div>
+          <div className="row gap-8">
+            <span className="dash-sec-icon"><IconBand size={16} /></span>
+            <div className="dash-sec-title">{t('dash.bandsTitle')}</div>
+          </div>
+          <div className="dash-sec-sub">{t('dash.bandsSub')}</div>
+        </div>
+        <Link href="/band" className="btn btn-ghost btn-sm">{t('dash.createRoom')}</Link>
+      </div>
+      <div className="card bands-empty">
+        <span className="empty-ico"><IconBand size={20} /></span>
+        <div className="grow">
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{t('dash.bandsEmpty')}</div>
+        </div>
+        <Link href="/band" className="btn btn-ghost btn-sm">{t('dash.joinRoom')}</Link>
+      </div>
+    </section>
   );
 }
 
@@ -92,70 +198,82 @@ export function DashboardScreen() {
   const { t } = useT();
   const router = useRouter();
   const [featured, setFeatured] = useState<Song[]>([]);
+  const [plan, setPlan] = useState<PlanId>('free');
+  const planLimit = monthlySongLimit(plan);
+  const used = LIBRARY.filter((s) => s.addedThisMonth).length;
+  const left = Math.max(0, planLimit - used);
+  const pct = Math.min(100, (used / planLimit) * 100);
 
-  useEffect(() => { setFeatured(publishedFeatured()); }, []);
+  useEffect(() => {
+    setFeatured(publishedFeatured());
+    try {
+      const raw = localStorage.getItem('cordeband_state_v1');
+      const p = raw ? (JSON.parse(raw) as { plan?: string }).plan : 'free';
+      setPlan(p === 'pro' || p === 'banda' ? p : 'free');
+    } catch { /* keep free */ }
+  }, []);
 
-  function openSong() { router.push('/instrument'); }
+  function openSong(_song?: Song) {
+    router.push('/instrument');
+  }
+
+  if (LIBRARY.length === 0 && featured.length === 0) {
+    return <EmptyLibrary />;
+  }
 
   return (
-    <div className="wrap page" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+    <main className="wrap app-main page">
+      <div className="page-head">
         <div>
-          <p className="eyebrow">{t('dash.eyebrow')}</p>
-          <h1 className="h2" style={{ marginTop: 6 }}>{t('dash.title')}</h1>
+          <span className="eyebrow">{t('dash.eyebrow')}</span>
+          <h1 className="h1">{t('dash.title')}</h1>
         </div>
-        <Link href="/upload" className="btn btn-primary" style={{ gap: 8, color: '#0a0a0a' }}>
-          <IconPlus size={16} />
-          {t('dash.add')}
-        </Link>
-      </div>
-
-      {/* Personal library */}
-      {LIBRARY.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 0' }}>
-          <p style={{ fontSize: 20, fontWeight: 700, marginBottom: 10 }}>{t('dash.emptyTitle')}</p>
-          <p className="muted" style={{ marginBottom: 24 }}>{t('dash.emptySub')}</p>
-          <Link href="/upload" className="btn btn-primary">{t('dash.uploadFirst')}</Link>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 48 }}>
-          {LIBRARY.map(s => <SongCard key={s.id} song={s} onOpen={openSong} />)}
-        </div>
-      )}
-
-      {/* Featured */}
-      {featured.length > 0 && (
-        <section style={{ marginBottom: 48 }}>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h2 className="h3">{t('dash.featTitle')}</h2>
-              <IconCrown size={16} style={{ color: 'var(--acc)' }} />
-            </div>
-            <p className="muted" style={{ fontSize: 14, marginTop: 4 }}>{t('dash.featSub')}</p>
+        <div className="col gap-12" style={{ alignItems: 'flex-end' }}>
+          <div className="plan-meter">
+            {plan !== 'free' && (
+              <span className="pill" style={{ marginBottom: 8, alignSelf: 'flex-end' }}>
+                <IconCrown size={13} />
+                {plan === 'banda' ? t('dash.poolBanda') : t('dash.unlimited')}
+              </span>
+            )}
+            <span className="muted tnum" style={{ fontSize: 13 }}>{used} {t('dash.thisMonth')} {planLimit} {t('dash.thisMonth2')}</span>
+            <div className="meter"><i style={{ width: `${pct}%` }} /></div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-            {featured.map(s => <FeaturedCard key={s.id} song={s} />)}
-          </div>
-        </section>
-      )}
-
-      {/* Bands section */}
-      <section>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div>
-            <h2 className="h3">{t('dash.bandsTitle')}</h2>
-            <p className="muted" style={{ fontSize: 14, marginTop: 4 }}>{t('dash.bandsSub')}</p>
-          </div>
-          <Link href="/band" className="btn btn-ghost btn-sm">{t('dash.createRoom')}</Link>
-        </div>
-        <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-          <p className="muted">{t('dash.bandsEmpty')}</p>
-          <Link href="/band" className="btn btn-ghost btn-sm" style={{ marginTop: 12 }}>
-            {t('dash.joinRoom')}
+          <Link href="/upload" className="btn btn-primary btn-sm">
+            <IconPlus size={15} /> {t('dash.add')}
           </Link>
         </div>
-      </section>
-    </div>
+      </div>
+
+      {LIBRARY.length > 0 ? (
+        <div className="song-grid">
+          {LIBRARY.map((s) => (
+            <SongCard key={s.id} song={s} onOpen={openSong} />
+          ))}
+          <Link href="/upload" className="card add-card song-card">
+            <div className="plus"><IconPlus size={22} /></div>
+            <div style={{ fontWeight: 600 }}>{t('dash.add')}</div>
+            <div className="muted" style={{ fontSize: 12.5 }}>
+              {`${left} ${left === 1 ? t('dash.newThisMonth') : t('dash.newThisMonth2')}`}
+            </div>
+          </Link>
+        </div>
+      ) : (
+        <div className="card bands-empty" style={{ padding: 24 }}>
+          <span className="empty-ico"><IconUpload size={20} /></span>
+          <div className="grow">
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{t('dash.emptyTitle')}</div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 3 }}>{t('dash.emptySub')}</div>
+          </div>
+          <Link href="/upload" className="btn btn-primary"><IconPlus size={15} /> {t('dash.uploadFirst')}</Link>
+        </div>
+      )}
+
+      <BandsSection />
+
+      {featured.length > 0 && (
+        <FeaturedSection items={featured} onOpen={openSong} />
+      )}
+    </main>
   );
 }

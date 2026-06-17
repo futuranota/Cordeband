@@ -28,8 +28,8 @@ export function PriceCard({ tier }: { tier: Tier }) {
       btn: 'btn-ghost',
     },
     pro: {
-      label: 'BASIC',
-      amount: '$9.99',
+      label: t('common.pro'),
+      amount: '$12.99',
       per: true,
       featKey: 'price.proFeat',
       forKey: 'price.forPro',
@@ -38,7 +38,7 @@ export function PriceCard({ tier }: { tier: Tier }) {
     },
     banda: {
       label: t('common.banda'),
-      amount: '$19.99',
+      amount: '$24.99',
       per: true,
       featKey: 'price.bandaFeat',
       forKey: 'price.forBanda',
@@ -73,7 +73,7 @@ export function PriceCard({ tier }: { tier: Tier }) {
         </div>
         {tier === 'pro' && (
           <span className="badge-pro" style={{ backgroundColor: 'rgb(255, 255, 255)', color: '#0a0a0a' }}>
-            <IconCrown size={12} sw={1.8} /> BASIC
+            <IconCrown size={12} sw={1.8} /> {t('common.pro')}
           </span>
         )}
         {tier === 'banda' && (

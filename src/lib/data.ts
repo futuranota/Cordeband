@@ -152,5 +152,85 @@ export function saveAdminAffiliates(list: AffiliateProduct[]): void {
 
 export function getAffiliates(instrument: string): AffiliateProduct[] {
   const admin = loadAdminAffiliates().filter((a) => a.active !== false);
-  return admin.filter((a) => a.instrument === instrument || a.instrument === 'all');
+  const matched = admin.filter((a) => a.instrument === instrument || a.instrument === 'all');
+  if (matched.length) return matched;
+  return DEFAULT_AFFILIATES[instrument] ?? DEFAULT_AFFILIATES.guitar ?? [];
 }
+
+/* ── Score data for sheet viewer ──────────────────────────── */
+const TUNING = [64, 59, 55, 50, 45, 40];
+
+function diatonicIndex(midi: number) {
+  const pcMap: Record<number, number> = { 0: 0, 1: 0, 2: 1, 3: 1, 4: 2, 5: 3, 6: 3, 7: 4, 8: 4, 9: 5, 10: 5, 11: 6 };
+  return Math.floor(midi / 12) * 7 + pcMap[midi % 12];
+}
+
+export function staffPos(midi: number) {
+  return diatonicIndex(midi) - diatonicIndex(64);
+}
+
+export function midiToTab(midi: number) {
+  let best: { string: number; fret: number } | null = null;
+  for (let s = 0; s < TUNING.length; s++) {
+    const fret = midi - TUNING[s];
+    if (fret < 0 || fret > 15) continue;
+    if (best === null || fret < best.fret) best = { string: s, fret };
+  }
+  if (!best) best = { string: 0, fret: Math.max(0, midi - 64) };
+  return best;
+}
+
+export type ScoreNote = {
+  beat: number;
+  dur: number;
+  midi: number;
+  s: number;
+  tab: { string: number; fret: number };
+};
+
+const E = 64, G = 67, A4 = 69, B4 = 71, C5 = 72, D = 62, C = 60, F = 65;
+const PHRASES: [number, number][][] = [
+  [[E, 1], [G, 1], [A4, 1], [B4, 1], [C5, 2], [B4, 1], [A4, 1]],
+  [[G, 1.5], [A4, 0.5], [B4, 1], [A4, 1], [G, 2], [E, 1], [D, 1]],
+  [[C, 1], [E, 1], [G, 1], [E, 1], [A4, 2], [G, 1], [F, 1]],
+  [[E, 2], [D, 1], [C, 1], [D, 1.5], [E, 0.5], [G, 1], [E, 1]],
+  [[A4, 1], [C5, 1], [B4, 1], [A4, 1], [G, 1], [E, 1], [D, 2]],
+  [[C, 2], [D, 1], [E, 1], [F, 1], [E, 1], [D, 1], [C, 1]],
+];
+
+function buildScore() {
+  const notes: ScoreNote[] = [];
+  let beat = 0;
+  const plan = [0, 1, 2, 3, 0, 1, 4, 5, 2, 3, 4, 5, 0, 2, 1, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 0, 5, 4, 1, 2, 3];
+  plan.forEach((pi) => {
+    PHRASES[pi].forEach(([m, dur]) => {
+      if (m !== 0) {
+        notes.push({ beat, dur, midi: m, s: staffPos(m), tab: midiToTab(m) });
+      }
+      beat += dur;
+    });
+  });
+  return { notes, totalBeats: beat };
+}
+
+export const SCORE = buildScore();
+
+const DEFAULT_AFFILIATES: Record<string, AffiliateProduct[]> = {
+  guitar: [
+    { id: 'g1', title: 'Cuerdas Elixir Nanoweb', price: '$14.99', url: '#', platform: 'Amazon', instrument: 'guitar' },
+    { id: 'g2', title: 'Capo Kyser Quick-Change', price: '$19.95', url: '#', platform: 'Sweetwater', instrument: 'guitar' },
+  ],
+  piano: [
+    { id: 'p1', title: 'Sustain pedal M-Audio', price: '$29.99', url: '#', platform: 'Amazon', instrument: 'piano' },
+  ],
+  bass: [
+    { id: 'b1', title: 'Cuerdas Ernie Ball Slinky Bass', price: '$24.99', url: '#', platform: 'Amazon', instrument: 'bass' },
+  ],
+  drums: [
+    { id: 'd1', title: 'Baquetas Vic Firth 5A', price: '$11.99', url: '#', platform: 'Amazon', instrument: 'drums' },
+  ],
+  vocals: [
+    { id: 'v1', title: 'Micrófono Shure SM58', price: '$99.00', url: '#', platform: 'Sweetwater', instrument: 'vocals' },
+  ],
+  other: [],
+};

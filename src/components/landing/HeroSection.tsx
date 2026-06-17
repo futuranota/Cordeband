@@ -48,7 +48,13 @@ export function HeroSection() {
           <Link href="/signup" className="btn btn-lg btn-primary" style={{ backgroundColor: 'rgb(32, 157, 215)', color: 'rgb(255, 255, 255)' }}>
             {t('hero.ctaStart')} →
           </Link>
-          <button type="button" className="btn btn-lg btn-ghost">{t('hero.ctaDemo')}</button>
+          <Link
+            href="/player"
+            className="btn btn-lg btn-ghost"
+            onClick={() => localStorage.setItem('cordeband_instrument', 'guitar')}
+          >
+            {t('hero.ctaDemo')}
+          </Link>
         </div>
         <div className="hero-trust">
           <IconCheck size={15} sw={2} />

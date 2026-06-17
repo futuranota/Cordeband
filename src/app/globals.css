@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./app-flow.css";
 
 /* ============================================================
    Cordeband — Design tokens
@@ -35,6 +36,7 @@
 
   --gutter: 40px;
   --maxw: 1240px;
+  --d: 1;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -107,8 +109,14 @@ body {
   padding: 0 var(--gutter);
 }
 .row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
 .spread { justify-content: space-between; }
+.center { justify-content: center; }
 .grow { flex: 1; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.gap-24 { gap: 24px; }
 .section { padding: clamp(56px, 9vh, 96px) 0; }
 .section-tight { padding: clamp(40px, 6vh, 64px) 0; }
 .section-head { max-width: 60ch; }
@@ -356,13 +364,17 @@ body {
   display: block; height: 100%; width: 42%;
   background: var(--acc); border-radius: 999px;
 }
-.muted-tag {
+.demo-card .muted-tag {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; font-weight: 600;
 }
-.muted-tag .dot {
+.demo-card .muted-tag .dot {
   width: 6px; height: 6px; border-radius: 999px;
-  background: var(--acc); flex-shrink: 0;
+  background: rgb(32, 157, 215); flex-shrink: 0;
+}
+.demo-bar .play-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; flex-shrink: 0; color: #fff;
 }
 
 /* ── How it works ─────────────────────────────────────────── */
@@ -470,18 +482,6 @@ body {
   background: var(--elev); border: 1px solid var(--line);
   border-radius: var(--radius); padding: 24px;
   display: flex; flex-direction: column; gap: 16px;
-}
-
-/* ── Auth ─────────────────────────────────────────────────── */
-.auth-layout { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
-.auth-aside {
-  background: linear-gradient(160deg, #0d2a3f, #081520);
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 64px; gap: 32px;
-}
-.auth-form-wrap {
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 64px; max-width: 480px; width: 100%; margin: 0 auto;
 }
 
 /* ── Footer ───────────────────────────────────────────────── */
