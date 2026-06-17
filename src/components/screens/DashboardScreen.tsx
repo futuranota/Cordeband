@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
+import { useSession } from '@/contexts/SessionContext';
 import {
   LIBRARY, publishedFeatured, stemsExpired, stemsMsLeft,
   INSTRUMENTS, type Song, type InstrumentKey,
 } from '@/lib/data';
-import { monthlySongLimit, type PlanId } from '@/lib/plans';
+import { monthlySongLimit } from '@/lib/plans';
+import { normalizePlan } from '@/lib/supabase/profile';
 import {
   IconPlus, IconCrown, IconBand, IconUpload, IconCheck,
   IconClock, IconNote, IconSpark, IconPlay,
@@ -197,8 +199,9 @@ function BandsSection() {
 export function DashboardScreen() {
   const { t } = useT();
   const router = useRouter();
+  const { profile } = useSession();
   const [featured, setFeatured] = useState<Song[]>([]);
-  const [plan, setPlan] = useState<PlanId>('free');
+  const plan = normalizePlan(profile?.plan);
   const planLimit = monthlySongLimit(plan);
   const used = LIBRARY.filter((s) => s.addedThisMonth).length;
   const left = Math.max(0, planLimit - used);
@@ -206,11 +209,6 @@ export function DashboardScreen() {
 
   useEffect(() => {
     setFeatured(publishedFeatured());
-    try {
-      const raw = localStorage.getItem('cordeband_state_v1');
-      const p = raw ? (JSON.parse(raw) as { plan?: string }).plan : 'free';
-      setPlan(p === 'pro' || p === 'banda' ? p : 'free');
-    } catch { /* keep free */ }
   }, []);
 
   function openSong(_song?: Song) {

@@ -1,28 +1,41 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useT } from '@/i18n/context';
+import { useSession } from '@/contexts/SessionContext';
 import { IconCrown } from '@/components/ui/icons';
-import { monthlySongLimit, type PlanId } from '@/lib/plans';
+import { monthlySongLimit, PLAN_PRICE, type PlanId } from '@/lib/plans';
+import { normalizePlan } from '@/lib/supabase/profile';
 import { LIBRARY } from '@/lib/data';
 
 export function ProfileScreen() {
   const { t } = useT();
-  const [plan, setPlan] = useState<PlanId>('free');
+  const { profile } = useSession();
+  const plan = normalizePlan(profile?.plan);
+  const intendedPlan = profile?.intended_plan ?? null;
   const limit = monthlySongLimit(plan);
   const used = LIBRARY.filter((s) => s.addedThisMonth).length;
   const pct = Math.min(100, (used / limit) * 100);
+  const showPending = plan === 'free' && (intendedPlan === 'pro' || intendedPlan === 'banda');
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('cordeband_state_v1');
-      const p = raw ? (JSON.parse(raw) as { plan?: string }).plan : 'free';
-      setPlan(p === 'pro' || p === 'banda' ? p : 'free');
-    } catch { /* keep free */ }
-  }, []);
+  const pendingLabel = intendedPlan === 'banda'
+    ? `${t('auth.planBadgeBanda')} · ${PLAN_PRICE.banda}${t('common.perMonth')}`
+    : `${t('auth.planBadgePro')} · ${PLAN_PRICE.pro}${t('common.perMonth')}`;
 
   return (
     <div className="wrap page" style={{ paddingTop: 48, paddingBottom: 80, maxWidth: 640 }}>
+      {showPending && intendedPlan && (
+        <div className="card" style={{ padding: 20, marginBottom: 24, borderColor: 'var(--acc-line)', background: 'var(--elev)' }}>
+          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: 'var(--acc)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            {pendingLabel}
+          </p>
+          <p style={{ margin: '0 0 6px', fontWeight: 800, fontSize: 18 }}>{t('profile.pendingTitle')}</p>
+          <p className="muted" style={{ margin: '0 0 16px', fontSize: 14, lineHeight: 1.5 }}>{t('profile.pendingSub')}</p>
+          <button type="button" className="btn btn-primary">
+            {t('profile.pendingCta')}
+          </button>
+        </div>
+      )}
+
       <p className="eyebrow" style={{ marginBottom: 8 }}>{t('profile.eyebrow')}</p>
       <h1 className="h2" style={{ marginBottom: 32 }}>{t('profile.title')}</h1>
 

@@ -2,48 +2,173 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { IconCheck, IconVolume, IconMute, IconArrow, IconNote } from '@/components/ui/icons';
+import { createClient } from '@/lib/supabase/client';
+import { getProfile, shouldRedirectToProfilePending } from '@/lib/supabase/profile';
+import {
+  parsePlanParam,
+  isPaidPlan,
+  PLAN_PRICE,
+  type PlanId,
+} from '@/lib/plans';
 
 type Mode = 'signup' | 'login';
 
+function planBadgeLabel(t: (k: string) => string, plan: PlanId): string {
+  if (plan === 'pro') return `${t('auth.planBadgePro')} · ${PLAN_PRICE.pro}${t('common.perMonth')}`;
+  if (plan === 'banda') return `${t('auth.planBadgeBanda')} · ${PLAN_PRICE.banda}${t('common.perMonth')}`;
+  return t('auth.planBadgeFree');
+}
+
+function planAsideTitle(t: (k: string) => string, tList: (k: string) => string[], plan: PlanId) {
+  if (plan === 'pro') return { title: t('auth.asideTitlePro'), bullets: tList('auth.proFeat') };
+  if (plan === 'banda') return { title: t('auth.asideTitleBanda'), bullets: tList('auth.bandaFeat') };
+  return {
+    title: t('auth.asideTitle'),
+    bullets: [t('auth.a1'), t('auth.a2'), t('auth.a3'), t('auth.a4')],
+  };
+}
+
+function submitLabel(t: (k: string) => string, isLogin: boolean, plan: PlanId): string {
+  if (isLogin) return t('nav.login');
+  if (plan === 'pro') return t('auth.createPro');
+  if (plan === 'banda') return t('auth.createBanda');
+  return t('auth.create');
+}
+
 export function SignupForm({ mode }: { mode: Mode }) {
-  const { t } = useT();
+  const { t, tList } = useT();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isLogin = mode === 'login';
+  const selectedPlan = isLogin ? 'free' : parsePlanParam(searchParams.get('plan'));
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
 
   const valid = (isLogin || name.trim().length > 1) && /\S+@\S+\.\S+/.test(email) && pass.length >= 6;
+  const aside = planAsideTitle(t, tList, selectedPlan);
+  const supabase = createClient();
 
-  function completeAuth() {
-    localStorage.setItem('cordeband_state_v1', JSON.stringify({
-      user: { name: name || email.split('@')[0], email },
-      plan: 'free',
-      lang: 'es',
-    }));
+  async function redirectAfterSession() {
+    localStorage.removeItem('cordeband_state_v1');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/dashboard');
+      return;
+    }
+    const profile = await getProfile(supabase, user.id);
+    if (shouldRedirectToProfilePending(profile)) {
+      router.push('/profile');
+      return;
+    }
     router.push('/dashboard');
+    router.refresh();
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleOAuth(provider: 'google' | 'apple') {
+    setError('');
+    const origin = window.location.origin;
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${origin}/auth/callback`,
+      },
+    });
+    if (oauthError) setError(oauthError.message);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
     setLoading(true);
-    setTimeout(completeAuth, 800);
+    setError('');
+
+    try {
+      if (isLogin) {
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password: pass,
+        });
+        if (loginError) {
+          setError(loginError.message);
+          return;
+        }
+        await redirectAfterSession();
+        return;
+      }
+
+      const origin = window.location.origin;
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password: pass,
+        options: {
+          emailRedirectTo: `${origin}/auth/callback`,
+          data: {
+            full_name: name.trim(),
+            intended_plan: isPaidPlan(selectedPlan) ? selectedPlan : null,
+          },
+        },
+      });
+
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
+
+      localStorage.removeItem('cordeband_state_v1');
+
+      if (data.session) {
+        await redirectAfterSession();
+        return;
+      }
+
+      setEmailSent(true);
+    } catch {
+      setError(t('auth.authError'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (emailSent) {
+    return (
+      <main className="wrap app-main page">
+        <div className="auth-wrap auth-wrap-single">
+          <div className="auth-form" style={{ textAlign: 'center' }}>
+            <span className="eyebrow">{t('auth.checkEmail')}</span>
+            <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.checkEmail')}</h1>
+            <p className="lead" style={{ fontSize: 15, marginTop: 12 }}>{t('auth.checkEmailSub')}</p>
+            <p className="muted" style={{ marginTop: 16, fontSize: 14 }}>{email}</p>
+            <Link href="/login" className="btn btn-primary btn-block btn-lg" style={{ marginTop: 28 }}>
+              {t('nav.login')}
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
     <main className="wrap app-main page">
-      <div className="auth-wrap">
+      <div className={`auth-wrap${isLogin ? ' auth-wrap-single' : ''}`}>
         <form className="auth-form" onSubmit={handleSubmit}>
           <span className="eyebrow">{isLogin ? t('nav.login') : t('auth.eyebrow')}</span>
           <h1 className="h2" style={{ marginTop: 14 }}>{isLogin ? t('nav.login') : t('auth.title')}</h1>
           <p className="lead" style={{ fontSize: 15, marginTop: 12, marginBottom: 26 }}>{t('auth.sub')}</p>
+
+          {!isLogin && isPaidPlan(selectedPlan) && (
+            <div className="auth-plan-badge" style={{ marginBottom: 20 }}>
+              {planBadgeLabel(t, selectedPlan)}
+            </div>
+          )}
 
           {!isLogin && (
             <div className="auth-field">
@@ -92,19 +217,27 @@ export function SignupForm({ mode }: { mode: Mode }) {
             </div>
           </div>
 
+          {error && (
+            <p style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 12 }}>{error}</p>
+          )}
+
           <button
             type="submit"
             className="btn btn-primary btn-block btn-lg"
             disabled={!valid || loading}
             style={{ marginTop: 8 }}
           >
-            {loading ? '…' : isLogin ? t('nav.login') : t('auth.create')} <IconArrow size={17} />
+            {loading ? '…' : submitLabel(t, isLogin, selectedPlan)} <IconArrow size={17} />
           </button>
 
           <div className="auth-sep">{t('auth.or')}</div>
           <div className="auth-oauth">
-            <button type="button" className="btn btn-ghost btn-block" onClick={completeAuth}>{t('auth.google')}</button>
-            <button type="button" className="btn btn-ghost btn-block" onClick={completeAuth}>{t('auth.apple')}</button>
+            <button type="button" className="btn btn-ghost btn-block" onClick={() => handleOAuth('google')}>
+              {t('auth.google')}
+            </button>
+            <button type="button" className="btn btn-ghost btn-block" onClick={() => handleOAuth('apple')}>
+              {t('auth.apple')}
+            </button>
           </div>
 
           <div className="auth-foot">
@@ -116,19 +249,24 @@ export function SignupForm({ mode }: { mode: Mode }) {
           <p className="muted" style={{ fontSize: 11.5, marginTop: 16, lineHeight: 1.5 }}>{t('auth.terms')}</p>
         </form>
 
-        <aside className="auth-aside">
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <span className="logo-mark" style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgb(255, 255, 255)' }}>
-              <IconNote size={24} sw={1.7} />
-            </span>
-            <h2 className="h2" style={{ marginTop: 20, fontSize: 26 }}>{t('auth.asideTitle')}</h2>
-          </div>
-          <ul className="auth-aside-list">
-            {[t('auth.a1'), t('auth.a2'), t('auth.a3'), t('auth.a4')].map((x, i) => (
-              <li key={i}><IconCheck size={18} sw={2.2} /> {x}</li>
-            ))}
-          </ul>
-        </aside>
+        {!isLogin && (
+          <aside className={`auth-aside${isPaidPlan(selectedPlan) ? ' auth-aside-paid' : ''}`}>
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              {isPaidPlan(selectedPlan) && (
+                <span className="auth-plan-badge">{planBadgeLabel(t, selectedPlan)}</span>
+              )}
+              <span className="logo-mark" style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgb(255, 255, 255)', display: 'inline-grid' }}>
+                <IconNote size={24} sw={1.7} />
+              </span>
+              <h2 className="h2" style={{ marginTop: 20, fontSize: 26 }}>{aside.title}</h2>
+            </div>
+            <ul className="auth-aside-list">
+              {aside.bullets.map((x, i) => (
+                <li key={i}><IconCheck size={18} sw={2.2} /> {x}</li>
+              ))}
+            </ul>
+          </aside>
+        )}
       </div>
     </main>
   );

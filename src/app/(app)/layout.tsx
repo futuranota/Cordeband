@@ -1,60 +1,15 @@
-'use client';
+import { createClient } from '@/lib/supabase/server';
+import { getProfile } from '@/lib/supabase/profile';
+import { AppShell } from '@/components/layout/AppShell';
 
-import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { AppNav } from '@/components/layout/AppNav';
-import { LandingNav } from '@/components/layout/LandingNav';
-
-type AppState = { user: { name: string; email: string }; plan: 'free' | 'pro' | 'banda' } | null;
-
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const isDemoPlayer = pathname === '/player';
-  const [state, setState] = useState<AppState>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (isDemoPlayer) {
-      try {
-        const raw = localStorage.getItem('cordeband_state_v1');
-        setState(raw ? JSON.parse(raw) as AppState : null);
-      } catch {
-        setState(null);
-      }
-      setReady(true);
-      return;
-    }
-    try {
-      const raw = localStorage.getItem('cordeband_state_v1');
-      const parsed = raw ? JSON.parse(raw) as AppState : null;
-      if (!parsed?.user) { router.replace('/login'); return; }
-      setState(parsed);
-    } catch { router.replace('/login'); return; }
-    setReady(true);
-  }, [router, isDemoPlayer]);
-
-  if (!ready) return null;
-
-  if (isDemoPlayer && !state?.user) {
-    return (
-      <>
-        <LandingNav />
-        <main style={{ minHeight: 'calc(100vh - 68px)', background: 'var(--surface)' }}>
-          {children}
-        </main>
-      </>
-    );
-  }
-
-  if (!state?.user) return null;
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const profile = user ? await getProfile(supabase, user.id) : null;
 
   return (
-    <>
-      <AppNav user={state.user} plan={state.plan ?? 'free'} />
-      <main style={{ minHeight: 'calc(100vh - 68px)', background: 'var(--surface)' }}>
-        {children}
-      </main>
-    </>
+    <AppShell user={user} profile={profile}>
+      {children}
+    </AppShell>
   );
 }

@@ -21,9 +21,7 @@ export function LandingNav() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <LangToggle />
           <Link href="/login" className="nav-link">{t('nav.login')}</Link>
-          <Link
-            href="/signup"
-            className="btn btn-primary btn-sm"
+          <Link href="/signup?plan=free" className="btn btn-primary btn-sm"
             style={{ backgroundColor: 'rgb(32,157,215)', color: '#fff' }}
           >
             {t('nav.start')}

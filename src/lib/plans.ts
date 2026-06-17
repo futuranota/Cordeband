@@ -15,3 +15,13 @@ export const PLAN_PRICE: Record<Exclude<PlanId, 'free'>, string> = {
 export function monthlySongLimit(plan: PlanId): number {
   return PLAN_SONG_LIMIT[plan];
 }
+
+/** Parse `?plan=` from signup/pricing links. */
+export function parsePlanParam(raw: string | null | undefined): PlanId {
+  if (raw === 'pro' || raw === 'banda') return raw;
+  return 'free';
+}
+
+export function isPaidPlan(plan: PlanId): plan is Exclude<PlanId, 'free'> {
+  return plan === 'pro' || plan === 'banda';
+}

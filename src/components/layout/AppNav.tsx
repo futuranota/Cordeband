@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Logo } from './Logo';
 import { LangToggle } from '@/components/ui/LangToggle';
 import { useT } from '@/i18n/context';
+import { createClient } from '@/lib/supabase/client';
 import { IconPlus, IconCrown, IconLogout, IconReset } from '@/components/ui/icons';
 
 type User = { name: string; email: string };
@@ -26,9 +27,12 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
-  function logout() {
+  async function logout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     localStorage.removeItem('cordeband_state_v1');
     router.push('/');
+    router.refresh();
   }
 
   const links = [

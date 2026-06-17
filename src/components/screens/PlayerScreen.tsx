@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
+import { useSession } from '@/contexts/SessionContext';
 import {
   STEMS, LIBRARY, SCORE, fmtTime, getAffiliates,
   INSTRUMENTS, type InstrumentKey, type Song, type AffiliateProduct,
@@ -258,6 +259,7 @@ function AffiliateRail({ instrument, collapsed, onToggle, onClick }: {
 export function PlayerScreen() {
   const { t } = useT();
   const router = useRouter();
+  const { user } = useSession();
   const S = SONG;
   const bpm = S.bpm || 84;
   const total = SCORE.totalBeats;
@@ -407,8 +409,7 @@ export function PlayerScreen() {
   }
 
   const downloadMp3 = () => {
-    const authed = !!localStorage.getItem('cordeband_state_v1');
-    if (!authed) { router.push('/signup'); return; }
+    if (!user) { router.push('/signup'); return; }
     setToast(`${t('player.dlPrep')} ${instName}…`);
     setTimeout(() => setToast(`${t('player.dlReady')} Cordeband — ${S.title} (–${instName}).mp3`), 1700);
   };

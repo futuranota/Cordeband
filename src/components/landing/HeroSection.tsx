@@ -45,7 +45,7 @@ export function HeroSection() {
         </h1>
         <p className="lead hero-sub" style={{ fontSize: 15 }}>{t('hero.sub')}</p>
         <div className="hero-cta">
-          <Link href="/signup" className="btn btn-lg btn-primary" style={{ backgroundColor: 'rgb(32, 157, 215)', color: 'rgb(255, 255, 255)' }}>
+          <Link href="/signup?plan=free" className="btn btn-lg btn-primary" style={{ backgroundColor: 'rgb(32, 157, 215)', color: 'rgb(255, 255, 255)' }}>
             {t('hero.ctaStart')} →
           </Link>
           <Link

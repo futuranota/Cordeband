@@ -96,7 +96,7 @@ export function PriceCard({ tier }: { tier: Tier }) {
 
       <div className="price-cta">
         <Link
-          href="/signup"
+          href={`/signup?plan=${tier}`}
           className={`btn btn-block ${d.btn}`}
           style={tier === 'banda' ? undefined : {
             borderWidth: 2,
