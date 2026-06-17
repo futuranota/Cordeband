@@ -1,59 +1,113 @@
 'use client';
 
-import { useState } from 'react';
-import { IconCheck } from '@/components/ui/icons';
 import { useT } from '@/i18n/context';
 import Link from 'next/link';
+import { IconCheck, IconCrown, IconSpark, IconBand } from '@/components/ui/icons';
 
 type Tier = 'free' | 'pro' | 'banda';
 
 export function PriceCard({ tier }: { tier: Tier }) {
-  const { t } = useT();
-  const [open, setOpen] = useState(false);
+  const { t, tList } = useT();
 
-  const prices: Record<Tier, string> = { free: '$0', pro: '$9', banda: '$15' };
-  const ctaKeys: Record<Tier, string> = { free: 'price.ctaFree', pro: 'price.ctaPro', banda: 'price.ctaBanda' };
-  const labelKeys: Record<Tier, string> = { free: 'price.forFree', pro: 'price.forPro', banda: 'price.forBanda' };
-  const featKeys: Record<Tier, string> = { free: 'price.freeFeat', pro: 'price.proFeat', banda: 'price.bandaFeat' };
+  const config: Record<Tier, {
+    label: string;
+    amount: string;
+    per: boolean;
+    featKey: string;
+    forKey: string;
+    ctaKey: string;
+    btn: string;
+  }> = {
+    free: {
+      label: t('common.free'),
+      amount: '$0',
+      per: false,
+      featKey: 'price.freeFeat',
+      forKey: 'price.forFree',
+      ctaKey: 'price.ctaFree',
+      btn: 'btn-ghost',
+    },
+    pro: {
+      label: 'BASIC',
+      amount: '$9.99',
+      per: true,
+      featKey: 'price.proFeat',
+      forKey: 'price.forPro',
+      ctaKey: 'price.ctaPro',
+      btn: 'btn-primary',
+    },
+    banda: {
+      label: t('common.banda'),
+      amount: '$19.99',
+      per: true,
+      featKey: 'price.bandaFeat',
+      forKey: 'price.forBanda',
+      ctaKey: 'price.ctaBanda',
+      btn: 'btn-white',
+    },
+  };
 
-  const feats = t(featKeys[tier]);
-  const featArr: string[] = Array.isArray(feats) ? feats as unknown as string[] : [];
-
-  const isPro = tier === 'pro';
+  const d = config[tier];
+  const hot = tier === 'banda';
+  const featArr = tList(d.featKey);
 
   return (
-    <div className={`price${isPro ? ' pro' : ''}`}>
-      {isPro && (
-        <div className="badge-pro" style={{ alignSelf: 'flex-start' }}>
+    <div className={`card price${hot ? ' pro' : ''}`} style={{ borderColor: 'rgba(69, 9, 9, 0.44)' }}>
+      {hot && (
+        <span className="price-pop">
+          <IconSpark size={12} />
           {t('price.popular')}
-        </div>
+        </span>
       )}
-      <div>
-        <p className="muted" style={{ fontSize: 13, margin: '0 0 6px' }}>{t(labelKeys[tier])}</p>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-          <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--text)' }}>{prices[tier]}</span>
-          <span className="muted" style={{ fontSize: 14 }}>{t('common.perMonth')}</span>
+
+      <div className="row spread" style={{ alignItems: 'flex-start' }}>
+        <div>
+          <div className="eyebrow" style={{ color: 'rgb(255, 255, 255)' }}>{d.label}</div>
+          <div className="row" style={{ alignItems: 'flex-end', gap: 6, marginTop: 10 }}>
+            <span className="amount">{d.amount}</span>
+            {d.per && (
+              <span style={{ marginBottom: 8, color: 'var(--text-3)', fontSize: 14 }}>{t('common.perMonth')}</span>
+            )}
+          </div>
+          <div className="price-for">{t(d.forKey)}</div>
         </div>
+        {tier === 'pro' && (
+          <span className="badge-pro" style={{ backgroundColor: 'rgb(255, 255, 255)', color: '#0a0a0a' }}>
+            <IconCrown size={12} sw={1.8} /> BASIC
+          </span>
+        )}
+        {tier === 'banda' && (
+          <span className="badge-pro badge-band">
+            <IconBand size={12} sw={1.8} /> Banda
+          </span>
+        )}
       </div>
 
-      <Link href="/signup" className={`btn btn-block ${isPro ? 'btn-primary' : 'btn-ghost'}`}>
-        {t(ctaKeys[tier])}
-      </Link>
-
-      <button className="price-toggle" onClick={() => setOpen((o) => !o)}>
-        {open ? t('price.hideFeats') : t('price.showFeats')}
-      </button>
-
-      {open && (
+      {featArr.length > 0 && (
         <ul>
           {featArr.map((f, i) => (
             <li key={i}>
-              <IconCheck size={14} style={{ color: 'var(--acc)', flexShrink: 0, marginTop: 2 }} />
-              <span>{f}</span>
+              <IconCheck size={16} sw={2} />
+              {f}
             </li>
           ))}
         </ul>
       )}
+
+      <div className="price-cta">
+        <Link
+          href="/signup"
+          className={`btn btn-block ${d.btn}`}
+          style={tier === 'banda' ? undefined : {
+            borderWidth: 2,
+            borderColor: 'rgba(131, 131, 131, 0)',
+            backgroundColor: 'rgba(255, 255, 255, 0)',
+            color: 'rgb(255, 255, 255)',
+          }}
+        >
+          {tier === 'pro' ? <span style={{ color: '#ffffff' }}>{t(d.ctaKey)}</span> : t(d.ctaKey)}
+        </Link>
+      </div>
     </div>
   );
 }

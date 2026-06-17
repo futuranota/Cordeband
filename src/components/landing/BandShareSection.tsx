@@ -2,88 +2,84 @@
 
 import { useState } from 'react';
 import { useT } from '@/i18n/context';
-import { InstGuitar, InstPiano, InstBass, InstDrums, InstVocals } from '@/components/ui/icons';
+import { INSTRUMENTS, type InstrumentKey } from '@/lib/data';
+import { IconArrow, IconCheck, IconLoop } from '@/components/ui/icons';
 import Link from 'next/link';
 
-const ROSTER = [
-  { Icon: InstGuitar, nameKey: 'band.m1', taken: true },
-  { Icon: InstPiano,  nameKey: 'band.m2', taken: true },
-  { Icon: InstBass,   nameKey: 'band.m3', taken: true },
-  { Icon: InstDrums,  nameKey: 'band.you', taken: true },
-  { Icon: InstVocals, nameKey: '',         taken: false },
+const BAND_CYAN = 'rgb(204, 249, 255)';
+
+const ROSTER: { key: InstrumentKey; nameKey: string; taken: boolean; ini: string; col: string }[] = [
+  { key: 'guitar', nameKey: 'band.m1', taken: true, ini: 'M', col: '#1ed760' },
+  { key: 'drums',  nameKey: 'band.m2', taken: true, ini: 'D', col: '#4d9fff' },
+  { key: 'bass',   nameKey: 'band.m3', taken: true, ini: 'S', col: '#e0a92b' },
+  { key: 'piano',  nameKey: 'band.you', taken: false, ini: 'T', col: '#ffffff' },
+  { key: 'vocals', nameKey: '', taken: false, ini: '?', col: '#ffffff' },
 ];
 
 export function BandShareSection() {
   const { t } = useT();
   const [copied, setCopied] = useState(false);
 
-  const fakeLink = 'cordeband.com/sala/BND-4X9';
+  const fakeLink = 'cordeband.app/s/las-luces-de-enero';
 
   function copy() {
     navigator.clipboard.writeText(fakeLink).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 1800);
     });
   }
 
   return (
-    <section id="band" className="section">
-      <div className="wrap" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, alignItems: 'center' }}>
-        <div>
-          <p className="eyebrow">{t('band.eyebrow')}</p>
-          <h2 className="h2" style={{ marginTop: 12 }}>{t('band.title')}</h2>
-          <p className="lead" style={{ marginTop: 16 }}>{t('band.sub')}</p>
-          <Link href="/signup" className="btn btn-primary" style={{ marginTop: 28 }}>
-            {t('band.cta')}
-          </Link>
-          <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>{t('band.note')}</p>
-        </div>
-
-        <div className="card" style={{ padding: 28 }}>
-          <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', margin: '0 0 8px' }}>
-            {t('band.linkLabel')}
-          </p>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-            <input
-              readOnly
-              value={fakeLink}
-              className="input"
-              style={{ fontSize: 13 }}
-            />
-            <button onClick={copy} className="btn btn-ghost btn-sm" style={{ flexShrink: 0 }}>
-              {copied ? t('band.copied') : t('band.copy')}
-            </button>
+    <section id="band" className="section bandshare">
+      <div className="wrap">
+        <div className="bandshare-grid">
+          <div>
+            <p className="eyebrow" style={{ color: BAND_CYAN }}>{t('band.eyebrow')}</p>
+            <h2 className="h2" style={{ marginTop: 14 }}>{t('band.title')}</h2>
+            <p className="lead" style={{ marginTop: 18 }}>{t('band.sub')}</p>
+            <div className="hero-cta" style={{ marginTop: 28 }}>
+              <Link href="/signup" className="btn btn-primary btn-lg" style={{ backgroundColor: BAND_CYAN, color: '#0a0a0a' }}>
+                {t('band.cta')} <IconArrow size={17} />
+              </Link>
+            </div>
+            <div className="hero-trust" style={{ marginTop: 18 }}>
+              <IconCheck size={15} sw={2} />
+              {t('band.note')}
+            </div>
           </div>
 
-          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', margin: '0 0 14px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            {t('band.rosterTitle')}
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {ROSTER.map((m, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 999,
-                  background: m.taken ? 'var(--acc-soft)' : 'var(--elev-2)',
-                  border: `1px solid ${m.taken ? 'var(--acc-line)' : 'var(--line)'}`,
-                  display: 'grid', placeItems: 'center',
-                  color: m.taken ? 'var(--acc)' : 'var(--text-3)',
-                }}>
-                  <m.Icon size={16} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  {m.taken ? (
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>
-                      {m.nameKey ? t(m.nameKey) : ''} {i === 3 ? `(${t('common.you')})` : ''}
-                    </span>
-                  ) : (
-                    <span className="muted" style={{ fontSize: 13 }}>{t('band.open')}</span>
-                  )}
-                </div>
-                {m.taken && (
-                  <span className="pill pill-ink" style={{ fontSize: 11 }}>{t('band.taken')}</span>
-                )}
+          <div className="share-card">
+            <label className="field-label">{t('band.linkLabel')}</label>
+            <div className="share-link">
+              <IconLoop size={15} style={{ color: 'var(--acc)', flex: '0 0 auto' }} />
+              <span className="url">{fakeLink}</span>
+              <button type="button" onClick={copy} className="btn btn-primary btn-sm" style={{ backgroundColor: BAND_CYAN, color: '#0a0a0a', flexShrink: 0 }}>
+                {copied ? t('band.copied') : t('band.copy')}
+              </button>
+            </div>
+
+            <div className="share-roster">
+              <div className="muted" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.02em', marginBottom: 2 }}>
+                {t('band.rosterTitle')}
               </div>
-            ))}
+              {ROSTER.map((r) => {
+                const { Icon } = INSTRUMENTS[r.key];
+                return (
+                  <div key={r.key} className={`roster-row${r.taken ? ' taken' : ''}`}>
+                    <span className="r-ico"><Icon size={17} sw={1.5} /></span>
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <div className="r-name">{t(`inst.${r.key}`)}</div>
+                      <div className="r-inst">{r.taken ? t(r.nameKey) : t('band.open')}</div>
+                    </div>
+                    {r.taken ? (
+                      <span className="r-ava" style={{ background: r.col, color: '#0a0a0a', border: 'none' }}>{r.ini}</span>
+                    ) : (
+                      <span className="roster-tag open">{t('band.open')}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
