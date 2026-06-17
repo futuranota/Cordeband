@@ -26,7 +26,9 @@ export function resolveBandView(opts: {
   isDemo: boolean;
   plan: PlanId;
   viewMode: PlayerViewMode;
+  roomSession?: boolean;
 }): boolean {
+  if (opts.roomSession) return true;
   if (!canTogglePlayerMode({ isDemo: opts.isDemo, plan: opts.plan })) return false;
   return opts.viewMode === 'banda';
 }

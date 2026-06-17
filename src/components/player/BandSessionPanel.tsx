@@ -78,7 +78,7 @@ export function BandSessionPanel({
             return (
               <li
                 key={m.id}
-                className={`band-roster-item${!m.active ? ' offline' : ''}${isPlaying ? ' playing' : ''}${isLeader ? ' leader' : ''}`}
+                className={`band-roster-item${!m.active ? ' offline' : ''}${isPlaying ? ' playing active-turn' : ''}${isLeader ? ' leader' : ''}`}
               >
                 <span className={`band-avatar${m.active ? ' on' : ''}`}>
                   {m.name[0]?.toUpperCase()}

@@ -7,7 +7,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = { title: 'Reproductor — Cordeband' };
 
 type PlayerPageProps = {
-  searchParams: Promise<{ demo?: string }>;
+  searchParams: Promise<{ demo?: string; room?: string; code?: string }>;
 };
 
 export default async function PlayerPage({ searchParams }: PlayerPageProps) {
@@ -16,12 +16,15 @@ export default async function PlayerPage({ searchParams }: PlayerPageProps) {
   const { data: { user } } = await supabase.auth.getUser();
   const profile = user ? await getProfile(supabase, user.id) : null;
   const plan = normalizePlan(profile?.plan);
+  const hasRoomSession = !!(params.room || params.code);
 
-  const initialDemoMode = defaultPlayerMode({
-    isDemo: !user,
-    plan,
-    urlDemo: params.demo ?? null,
-  });
+  const initialDemoMode = hasRoomSession
+    ? 'banda'
+    : defaultPlayerMode({
+        isDemo: !user,
+        plan,
+        urlDemo: params.demo ?? null,
+      });
 
   return <PlayerScreen initialDemoMode={initialDemoMode} />;
 }
