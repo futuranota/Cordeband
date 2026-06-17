@@ -38,7 +38,7 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
   const links = [
     { href: '/dashboard', label: t('nav.library') },
     { href: '/instrument', label: t('nav.practice') },
-    { href: '/band', label: t('nav.band') },
+    ...(plan === 'banda' ? [{ href: '/band', label: t('nav.band') }] : []),
     { href: '/profile', label: t('nav.subscription') },
   ];
 

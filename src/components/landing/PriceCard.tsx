@@ -2,17 +2,24 @@
 
 import { useT } from '@/i18n/context';
 import Link from 'next/link';
-import { IconCheck, IconCrown, IconSpark, IconBand } from '@/components/ui/icons';
+import { IconCheck, IconSpark } from '@/components/ui/icons';
+import { PlanPriceDisplay } from '@/components/billing/PlanPriceDisplay';
+import { BillingPeriodToggle } from '@/components/billing/BillingPeriodToggle';
+import { saveBillingPeriod, type BillingPeriod } from '@/lib/plans';
 
 type Tier = 'free' | 'pro' | 'banda';
 
-export function PriceCard({ tier }: { tier: Tier }) {
+type PriceCardProps = {
+  tier: Tier;
+  billingPeriod: BillingPeriod;
+  onBillingChange?: (period: BillingPeriod) => void;
+};
+
+export function PriceCard({ tier, billingPeriod, onBillingChange }: PriceCardProps) {
   const { t, tList } = useT();
 
   const config: Record<Tier, {
     label: string;
-    amount: string;
-    per: boolean;
     featKey: string;
     forKey: string;
     ctaKey: string;
@@ -20,8 +27,6 @@ export function PriceCard({ tier }: { tier: Tier }) {
   }> = {
     free: {
       label: t('common.free'),
-      amount: '$0',
-      per: false,
       featKey: 'price.freeFeat',
       forKey: 'price.forFree',
       ctaKey: 'price.ctaFree',
@@ -29,8 +34,6 @@ export function PriceCard({ tier }: { tier: Tier }) {
     },
     pro: {
       label: t('common.pro'),
-      amount: '$12.99',
-      per: true,
       featKey: 'price.proFeat',
       forKey: 'price.forPro',
       ctaKey: 'price.ctaPro',
@@ -38,8 +41,6 @@ export function PriceCard({ tier }: { tier: Tier }) {
     },
     banda: {
       label: t('common.banda'),
-      amount: '$24.99',
-      per: true,
       featKey: 'price.bandaFeat',
       forKey: 'price.forBanda',
       ctaKey: 'price.ctaBanda',
@@ -50,6 +51,15 @@ export function PriceCard({ tier }: { tier: Tier }) {
   const d = config[tier];
   const hot = tier === 'banda';
   const featArr = tList(d.featKey);
+  const isPaid = tier !== 'free';
+  const signupHref =
+    tier === 'free'
+      ? '/signup?plan=free'
+      : `/signup?plan=${tier}&billing=${billingPeriod}`;
+
+  function onCtaClick() {
+    if (isPaid) saveBillingPeriod(billingPeriod);
+  }
 
   return (
     <div className={`card price${hot ? ' pro' : ''}`} style={{ borderColor: 'rgba(69, 9, 9, 0.44)' }}>
@@ -63,23 +73,26 @@ export function PriceCard({ tier }: { tier: Tier }) {
       <div className="row spread" style={{ alignItems: 'flex-start' }}>
         <div>
           <div className="eyebrow" style={{ color: 'rgb(255, 255, 255)' }}>{d.label}</div>
-          <div className="row" style={{ alignItems: 'flex-end', gap: 6, marginTop: 10 }}>
-            <span className="amount">{d.amount}</span>
-            {d.per && (
-              <span style={{ marginBottom: 8, color: 'var(--text-3)', fontSize: 14 }}>{t('common.perMonth')}</span>
+          <div style={{ marginTop: 10 }}>
+            {tier === 'free' ? (
+              <div className="row" style={{ alignItems: 'flex-end', gap: 6 }}>
+                <span className="amount">$0</span>
+              </div>
+            ) : (
+              <PlanPriceDisplay plan={tier} period={billingPeriod} variant="price-card" />
             )}
           </div>
           <div className="price-for">{t(d.forKey)}</div>
         </div>
-        {tier === 'pro' && (
-          <span className="badge-pro" style={{ backgroundColor: 'rgb(255, 255, 255)', color: '#0a0a0a' }}>
-            <IconCrown size={12} sw={1.8} /> {t('common.pro')}
-          </span>
-        )}
-        {tier === 'banda' && (
-          <span className="badge-pro badge-band">
-            <IconBand size={12} sw={1.8} /> Banda
-          </span>
+
+        {isPaid && onBillingChange && (
+          <div className="price-card-billing">
+            <BillingPeriodToggle
+              value={billingPeriod}
+              onChange={onBillingChange}
+              variant="compact"
+            />
+          </div>
         )}
       </div>
 
@@ -96,8 +109,9 @@ export function PriceCard({ tier }: { tier: Tier }) {
 
       <div className="price-cta">
         <Link
-          href={`/signup?plan=${tier}`}
+          href={signupHref}
           className={`btn btn-block ${d.btn}`}
+          onClick={onCtaClick}
           style={tier === 'banda' ? undefined : {
             borderWidth: 2,
             borderColor: 'rgba(131, 131, 131, 0)',

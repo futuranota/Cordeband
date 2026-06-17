@@ -1,19 +1,28 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { useSession } from '@/contexts/SessionContext';
 import {
   STEMS, LIBRARY, SCORE, fmtTime, getAffiliates,
   INSTRUMENTS, type InstrumentKey, type Song, type AffiliateProduct,
 } from '@/lib/data';
+import { DEMO_BAND_MEMBERS } from '@/lib/demo-band';
+import {
+  canTogglePlayerMode,
+  resolveBandView,
+  type PlayerViewMode,
+} from '@/lib/plan-access';
+import { normalizePlan } from '@/lib/supabase/profile';
 import { StagePanel } from '@/components/player/StagePanel';
 import { SheetViewer } from '@/components/player/SheetViewer';
+import { BandSessionPanel } from '@/components/player/BandSessionPanel';
 import {
   IconPlay, IconPause, IconArrow, IconArrowL, IconLoop, IconGauge, IconVolume, IconMute,
   IconWave, IconSpark, IconClock, IconCheck, IconReset, IconUpload, IconExternal, IconCart,
+  IconCrown, IconBand,
 } from '@/components/ui/icons';
 
 const SONG = LIBRARY[0];
@@ -256,15 +265,24 @@ function AffiliateRail({ instrument, collapsed, onToggle, onClick }: {
   );
 }
 
-export function PlayerScreen() {
+export function PlayerScreen({ initialDemoMode = 'solo' }: { initialDemoMode?: PlayerViewMode }) {
+  return (
+    <Suspense fallback={null}>
+      <PlayerScreenInner initialDemoMode={initialDemoMode} />
+    </Suspense>
+  );
+}
+
+function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMode }) {
   const { t } = useT();
   const router = useRouter();
-  const { user } = useSession();
+  const searchParams = useSearchParams();
+  const { user, profile } = useSession();
   const S = SONG;
   const bpm = S.bpm || 84;
   const total = SCORE.totalBeats;
 
-  const [instrument] = useState<InstrumentKey>(readInstrument);
+  const [instrument, setInstrument] = useState<InstrumentKey>('guitar');
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [curBeat, setCurBeat] = useState(0);
@@ -274,10 +292,37 @@ export function PlayerScreen() {
   const [loop, setLoop] = useState<{ a: number; b: number } | null>(null);
   const [pendingA, setPendingA] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [vols, setVols] = useState<Record<string, number>>(() => buildDefaultVols(readInstrument()));
-  const [affCollapsed, setAffCollapsed] = useState(
-    () => typeof window !== 'undefined' && localStorage.getItem('cordeband_aff_collapsed') === '1',
-  );
+  const [vols, setVols] = useState<Record<string, number>>(() => buildDefaultVols('guitar'));
+  const [affCollapsed, setAffCollapsed] = useState(false);
+
+  const isDemo = !user;
+  const plan = normalizePlan(profile?.plan);
+  const showModeToggle = canTogglePlayerMode({ isDemo, plan });
+  const [viewMode, setViewMode] = useState<PlayerViewMode>(initialDemoMode);
+  const isBandView = resolveBandView({ isDemo, plan, viewMode });
+  const leaderInstrument: InstrumentKey = 'guitar';
+
+  useEffect(() => {
+    const savedInst = readInstrument();
+    setInstrument(savedInst);
+    setVols(buildDefaultVols(savedInst));
+    if (localStorage.getItem('cordeband_aff_collapsed') === '1') {
+      setAffCollapsed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!canTogglePlayerMode({ isDemo, plan })) {
+      setViewMode('solo');
+      return;
+    }
+    if (isDemo) {
+      const demo = searchParams.get('demo');
+      if (demo === 'banda' || demo === 'solo') {
+        setViewMode(demo === 'banda' ? 'banda' : 'solo');
+      }
+    }
+  }, [searchParams, isDemo, plan]);
 
   const partsBeats = useMemo(() => PARTS_F.map(([a, b]) => ({ a: a * total, b: b * total })), [total]);
   const beatRef = useRef(0);
@@ -416,99 +461,228 @@ export function PlayerScreen() {
 
   return (
     <main className="wrap app-main page">
-      <Link href="/instrument" className="btn btn-ghost btn-sm" style={{ marginBottom: 20 }}>
-        <IconArrowL size={15} /> {t('player.changeInst')}
-      </Link>
+      <div className="row spread" style={{ marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <Link href="/instrument" className="btn btn-ghost btn-sm">
+          <IconArrowL size={15} /> {t('player.changeInst')}
+        </Link>
 
-      <div className="player" data-aff="side" data-aff-collapsed={affCollapsed ? 'true' : undefined}>
-        <section className="stage">
-          <div className="player-head">
-            <div className="now-playing">
-              <div className="np-title">{S.title}</div>
-              <div className="np-meta">
-                <span>{S.artist}</span><span style={{ opacity: 0.4 }}>·</span>
-                <span className="muted-tag"><span className="dot" />{instName} {t('player.muted')}</span>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span>{S.bpm} BPM · {S.keySig}</span>
-              </div>
-            </div>
-            <div className="viewtoggle">
-              {([['staff', t('player.staff')], ['tab', t('player.tab')], ['roll', t('player.roll')]] as const).map(([k, l]) => (
-                <button key={k} type="button" className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>
-              ))}
-            </div>
+        {showModeToggle && (
+          <div className="demo-mode-toggle" role="tablist" aria-label={t('bandDemo.toggleLabel')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'solo'}
+              className={viewMode === 'solo' ? 'on' : ''}
+              onClick={() => setViewMode('solo')}
+            >
+              <IconCrown size={14} />
+              {t('bandDemo.solo')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'banda'}
+              className={viewMode === 'banda' ? 'on' : ''}
+              onClick={() => setViewMode('banda')}
+            >
+              <IconBand size={14} />
+              {t('bandDemo.banda')}
+            </button>
           </div>
-
-          <StagePanel
-            instruments={S.instruments}
-            youKey={inst}
-            activeKeys={activeKeys}
-            title={t('sel.stageTitle')}
-            sub={t('sel.stageSub')}
-          />
-
-          <TurnBanner status={status} secsToEntry={secsToEntry} yourTime={yourTime} />
-
-          <SheetViewer
-            view={view}
-            curBeat={curBeat}
-            loop={loop}
-            loading={loading}
-            waiting={isWaiting && !loading && playing}
-            waitLabel={t('player.waitOverlay')}
-          />
-
-          <div className="card transport">
-            <div className="transport-row">
-              <button type="button" className="play-btn" disabled={loading}
-                onClick={() => setPlaying((p) => !p)}>
-                {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
-              </button>
-              <span className="time">{fmtTime(curTime)}</span>
-              <div className="scrub" ref={scrubRef} onPointerDown={onScrubDown}>
-                <div className="scrub-track">
-                  {partsBeats.map((p, i) => (
-                    <div key={i} className="scrub-parts" style={{ left: `${p.a / total * 100}%`, width: `${(p.b - p.a) / total * 100}%` }} />
-                  ))}
-                  {loop && <div className="scrub-loop" style={{ left: `${loop.a / total * 100}%`, width: `${(loop.b - loop.a) / total * 100}%` }} />}
-                  <div className="scrub-fill" style={{ width: `${ratio * 100}%` }} />
-                </div>
-                <div className="scrub-head" style={{ left: `${ratio * 100}%` }} />
-              </div>
-              <span className="time" style={{ textAlign: 'right' }}>{fmtTime(totalTime)}</span>
-            </div>
-            <div className="mini-ctrl" style={{ marginTop: 14, flexWrap: 'wrap' }}>
-              <TempoControl tempo={tempo} setTempo={setTempo} />
-              <button type="button" className={`chip-btn${loop || pendingA !== null ? ' on' : ''}`} onClick={loopClick}>
-                <IconLoop size={14} /> {loopLabel}
-              </button>
-              {(loop || pendingA !== null) && (
-                <button type="button" className="chip-btn" onClick={() => { setLoop(null); setPendingA(null); }}>{t('player.remove')}</button>
-              )}
-              <button type="button" className="chip-btn" onClick={() => { beatRef.current = 0; setCurBeat(0); yourBeatsRef.current = 0; setYourTime(0); }}>
-                <IconReset size={14} /> {t('player.restart')}
-              </button>
-              <div className="grow" />
-              <button type="button" className="btn btn-primary btn-sm" onClick={downloadMp3}>
-                <IconUpload size={14} style={{ transform: 'rotate(180deg)' }} /> {t('player.download')}
-              </button>
-            </div>
-          </div>
-
-          <StemMixer song={S} instrument={inst} vols={vols} setVol={setVol} />
-        </section>
-
-        {!affCollapsed && (
-          <AffiliateRail
-            instrument={inst}
-            collapsed={false}
-            onToggle={toggleAff}
-            onClick={showToast}
-          />
         )}
       </div>
 
-      {affCollapsed && (
+      {isBandView ? (
+        <div className="player-band-layout">
+          <aside className="band-player-roster" aria-label={t('bandDemo.roster')}>
+            <BandSessionPanel
+              members={DEMO_BAND_MEMBERS.map((m) => ({
+                ...m,
+                playing: playing ? activeKeys.includes(m.instrument) : false,
+              }))}
+              activeInstruments={playing ? activeKeys : []}
+              leaderInstrument={leaderInstrument}
+              playing={playing}
+            />
+          </aside>
+
+          <div className="player-band-main">
+            <section className="stage">
+              <div className="band-leader-head">
+                <span className="eyebrow" style={{ fontSize: 10 }}>{t('bandDemo.leaderPanel')}</span>
+                <p style={{ margin: '4px 0 0', fontWeight: 800, fontSize: 16 }}>{t('bandDemo.leaderSub')}</p>
+              </div>
+
+              <div className="player-head">
+                <div className="now-playing">
+                  <div className="np-title">{S.title}</div>
+                  <div className="np-meta">
+                    <span>{S.artist}</span><span style={{ opacity: 0.4 }}>·</span>
+                    <span className="muted-tag"><span className="dot" />{instName} {t('player.muted')}</span>
+                    <span style={{ opacity: 0.4 }}>·</span>
+                    <span>{S.bpm} BPM · {S.keySig}</span>
+                  </div>
+                </div>
+                <div className="viewtoggle">
+                  {([['staff', t('player.staff')], ['tab', t('player.tab')], ['roll', t('player.roll')]] as const).map(([k, l]) => (
+                    <button key={k} type="button" className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+
+              <StagePanel
+                instruments={S.instruments}
+                youKey={inst}
+                activeKeys={activeKeys}
+                title={t('bandDemo.stageTitle')}
+                sub={t('bandDemo.stageSub')}
+              />
+
+              <SheetViewer
+                view={view}
+                curBeat={curBeat}
+                loop={loop}
+                loading={loading}
+                waiting={isWaiting && !loading && playing}
+                waitLabel={t('player.waitOverlay')}
+              />
+
+              <div className="card transport">
+                <div className="transport-row">
+                  <button type="button" className="play-btn" disabled={loading}
+                    onClick={() => setPlaying((p) => !p)}>
+                    {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
+                  </button>
+                  <span className="time">{fmtTime(curTime)}</span>
+                  <div className="scrub" ref={scrubRef} onPointerDown={onScrubDown}>
+                    <div className="scrub-track">
+                      {partsBeats.map((p, i) => (
+                        <div key={i} className="scrub-parts" style={{ left: `${p.a / total * 100}%`, width: `${(p.b - p.a) / total * 100}%` }} />
+                      ))}
+                      {loop && <div className="scrub-loop" style={{ left: `${loop.a / total * 100}%`, width: `${(loop.b - loop.a) / total * 100}%` }} />}
+                      <div className="scrub-fill" style={{ width: `${ratio * 100}%` }} />
+                    </div>
+                    <div className="scrub-head" style={{ left: `${ratio * 100}%` }} />
+                  </div>
+                  <span className="time" style={{ textAlign: 'right' }}>{fmtTime(totalTime)}</span>
+                </div>
+                <div className="mini-ctrl" style={{ marginTop: 14, flexWrap: 'wrap' }}>
+                  <TempoControl tempo={tempo} setTempo={setTempo} />
+                  <button type="button" className={`chip-btn${loop || pendingA !== null ? ' on' : ''}`} onClick={loopClick}>
+                    <IconLoop size={14} /> {loopLabel}
+                  </button>
+                  {(loop || pendingA !== null) && (
+                    <button type="button" className="chip-btn" onClick={() => { setLoop(null); setPendingA(null); }}>{t('player.remove')}</button>
+                  )}
+                  <button type="button" className="chip-btn" onClick={() => { beatRef.current = 0; setCurBeat(0); yourBeatsRef.current = 0; setYourTime(0); }}>
+                    <IconReset size={14} /> {t('player.restart')}
+                  </button>
+                  <div className="grow" />
+                  <button type="button" className="btn btn-primary btn-sm" onClick={downloadMp3}>
+                    <IconUpload size={14} style={{ transform: 'rotate(180deg)' }} /> {t('player.download')}
+                  </button>
+                </div>
+              </div>
+
+              <StemMixer song={S} instrument={inst} vols={vols} setVol={setVol} />
+            </section>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="player"
+          data-aff="side"
+          data-aff-collapsed={affCollapsed ? 'true' : undefined}
+        >
+          <section className="stage">
+            <div className="player-head">
+              <div className="now-playing">
+                <div className="np-title">{S.title}</div>
+                <div className="np-meta">
+                  <span>{S.artist}</span><span style={{ opacity: 0.4 }}>·</span>
+                  <span className="muted-tag"><span className="dot" />{instName} {t('player.muted')}</span>
+                  <span style={{ opacity: 0.4 }}>·</span>
+                  <span>{S.bpm} BPM · {S.keySig}</span>
+                </div>
+              </div>
+              <div className="viewtoggle">
+                {([['staff', t('player.staff')], ['tab', t('player.tab')], ['roll', t('player.roll')]] as const).map(([k, l]) => (
+                  <button key={k} type="button" className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>
+                ))}
+              </div>
+            </div>
+
+            <StagePanel
+              instruments={S.instruments}
+              youKey={inst}
+              activeKeys={activeKeys}
+              title={t('sel.stageTitle')}
+              sub={t('sel.stageSub')}
+            />
+
+            <TurnBanner status={status} secsToEntry={secsToEntry} yourTime={yourTime} />
+
+            <SheetViewer
+              view={view}
+              curBeat={curBeat}
+              loop={loop}
+              loading={loading}
+              waiting={isWaiting && !loading && playing}
+              waitLabel={t('player.waitOverlay')}
+            />
+
+            <div className="card transport">
+              <div className="transport-row">
+                <button type="button" className="play-btn" disabled={loading}
+                  onClick={() => setPlaying((p) => !p)}>
+                  {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
+                </button>
+                <span className="time">{fmtTime(curTime)}</span>
+                <div className="scrub" ref={scrubRef} onPointerDown={onScrubDown}>
+                  <div className="scrub-track">
+                    {partsBeats.map((p, i) => (
+                      <div key={i} className="scrub-parts" style={{ left: `${p.a / total * 100}%`, width: `${(p.b - p.a) / total * 100}%` }} />
+                    ))}
+                    {loop && <div className="scrub-loop" style={{ left: `${loop.a / total * 100}%`, width: `${(loop.b - loop.a) / total * 100}%` }} />}
+                    <div className="scrub-fill" style={{ width: `${ratio * 100}%` }} />
+                  </div>
+                  <div className="scrub-head" style={{ left: `${ratio * 100}%` }} />
+                </div>
+                <span className="time" style={{ textAlign: 'right' }}>{fmtTime(totalTime)}</span>
+              </div>
+              <div className="mini-ctrl" style={{ marginTop: 14, flexWrap: 'wrap' }}>
+                <TempoControl tempo={tempo} setTempo={setTempo} />
+                <button type="button" className={`chip-btn${loop || pendingA !== null ? ' on' : ''}`} onClick={loopClick}>
+                  <IconLoop size={14} /> {loopLabel}
+                </button>
+                {(loop || pendingA !== null) && (
+                  <button type="button" className="chip-btn" onClick={() => { setLoop(null); setPendingA(null); }}>{t('player.remove')}</button>
+                )}
+                <button type="button" className="chip-btn" onClick={() => { beatRef.current = 0; setCurBeat(0); yourBeatsRef.current = 0; setYourTime(0); }}>
+                  <IconReset size={14} /> {t('player.restart')}
+                </button>
+                <div className="grow" />
+                <button type="button" className="btn btn-primary btn-sm" onClick={downloadMp3}>
+                  <IconUpload size={14} style={{ transform: 'rotate(180deg)' }} /> {t('player.download')}
+                </button>
+              </div>
+            </div>
+
+            <StemMixer song={S} instrument={inst} vols={vols} setVol={setVol} />
+          </section>
+
+          {!affCollapsed && (
+            <AffiliateRail
+              instrument={inst}
+              collapsed={false}
+              onToggle={toggleAff}
+              onClick={showToast}
+            />
+          )}
+        </div>
+      )}
+
+      {!isBandView && affCollapsed && (
         <AffiliateRail
           instrument={inst}
           collapsed

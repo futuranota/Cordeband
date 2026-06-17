@@ -1,8 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useT } from '@/i18n/context';
+import { useSession } from '@/contexts/SessionContext';
 import { INST_ORDER, INSTRUMENTS, LIBRARY } from '@/lib/data';
+import { canUseBandPlayer } from '@/lib/plan-access';
+import { normalizePlan } from '@/lib/supabase/profile';
 import { IconBand } from '@/components/ui/icons';
 
 const ROOM_CODE = 'BND-4X9';
@@ -10,6 +14,8 @@ const SONG = LIBRARY[0];
 
 export function BandScreen() {
   const { t } = useT();
+  const { profile } = useSession();
+  const plan = normalizePlan(profile?.plan);
   const [copied, setCopied] = useState(false);
   const [selected, setSelected] = useState<string>('guitar');
 
@@ -20,6 +26,21 @@ export function BandScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  }
+
+  if (!canUseBandPlayer(plan)) {
+    return (
+      <div className="wrap page" style={{ paddingTop: 48, paddingBottom: 80, maxWidth: 560 }}>
+        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
+          <div style={{ marginBottom: 16 }}>
+            <IconBand size={32} style={{ color: 'var(--acc)' }} />
+          </div>
+          <h1 className="h2" style={{ marginBottom: 8 }}>{t('room.createTitle')}</h1>
+          <p className="muted" style={{ marginBottom: 24 }}>{t('room.bandOnly')}</p>
+          <Link href="/profile" className="btn btn-primary">{t('room.getBanda')}</Link>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -9,8 +9,9 @@ import {
   LIBRARY, publishedFeatured, stemsExpired, stemsMsLeft,
   INSTRUMENTS, type Song, type InstrumentKey,
 } from '@/lib/data';
-import { monthlySongLimit } from '@/lib/plans';
+import { includedSongQuota } from '@/lib/plans';
 import { normalizePlan } from '@/lib/supabase/profile';
+import { UpgradeBanner } from '@/components/billing/UpgradeBanner';
 import {
   IconPlus, IconCrown, IconBand, IconUpload, IconCheck,
   IconClock, IconNote, IconSpark, IconPlay,
@@ -171,8 +172,16 @@ function FeaturedSection({ items, onOpen }: { items: Song[]; onOpen: (song: Song
   );
 }
 
-function BandsSection() {
+function BandsSection({ isBanda }: { isBanda: boolean }) {
   const { t } = useT();
+
+  const demoMembers = [
+    { name: t('band.m1'), inst: 'vocals' as const, active: true },
+    { name: t('band.m2'), inst: 'drums' as const, active: true },
+    { name: t('band.m3'), inst: 'bass' as const, active: true },
+    { name: t('band.you'), inst: 'guitar' as const, active: true, leader: true },
+  ];
+
   return (
     <section className="dash-section">
       <div className="dash-sec-head">
@@ -183,15 +192,50 @@ function BandsSection() {
           </div>
           <div className="dash-sec-sub">{t('dash.bandsSub')}</div>
         </div>
-        <Link href="/band" className="btn btn-ghost btn-sm">{t('dash.createRoom')}</Link>
+        {isBanda && (
+          <Link href="/band" className="btn btn-ghost btn-sm">{t('dash.createRoom')}</Link>
+        )}
       </div>
-      <div className="card bands-empty">
-        <span className="empty-ico"><IconBand size={20} /></span>
-        <div className="grow">
-          <div style={{ fontWeight: 700, fontSize: 15 }}>{t('dash.bandsEmpty')}</div>
+
+      {isBanda ? (
+        <div className="card band-room">
+          <div className="band-room-glyph"><IconBand size={22} /></div>
+          <div className="band-room-info">
+            <div className="band-room-name">{t('dash.bandRoomName')}</div>
+            <div className="band-room-meta">
+              <span>{demoMembers.length} {t('dash.roomMembers')}</span>
+              <span>·</span>
+              <span className="band-room-state playing">
+                <span className="ping" />
+                {t('dash.roomPlaying')}
+              </span>
+            </div>
+            <div className="band-dash-roster">
+              {demoMembers.map((m) => {
+                const { Icon } = INSTRUMENTS[m.inst];
+                return (
+                  <span key={m.name} className={`band-dash-chip${m.leader ? ' leader' : ''}`}>
+                    <span className="band-dash-avatar">{m.name[0]}</span>
+                    <Icon size={12} sw={1.5} />
+                    {m.name}
+                    {m.leader && <span className="band-leader-tag">{t('room.leaderTag')}</span>}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <Link href="/player" className="btn btn-primary btn-sm">{t('dash.openRoom')}</Link>
         </div>
-        <Link href="/band" className="btn btn-ghost btn-sm">{t('dash.joinRoom')}</Link>
-      </div>
+      ) : (
+        <div className="card bands-empty">
+          <span className="empty-ico"><IconBand size={20} /></span>
+          <div className="grow">
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{t('room.bandOnly')}</div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 3 }}>{t('dash.bandUpgradeSub')}</div>
+          </div>
+          <Link href="/profile" className="btn btn-primary btn-sm">{t('dash.bandUpgradeCta')}</Link>
+        </div>
+      )}
     </section>
   );
 }
@@ -202,10 +246,12 @@ export function DashboardScreen() {
   const { profile } = useSession();
   const [featured, setFeatured] = useState<Song[]>([]);
   const plan = normalizePlan(profile?.plan);
-  const planLimit = monthlySongLimit(plan);
+  const planLimit = includedSongQuota(plan);
   const used = LIBRARY.filter((s) => s.addedThisMonth).length;
   const left = Math.max(0, planLimit - used);
-  const pct = Math.min(100, (used / planLimit) * 100);
+  const pct = planLimit > 0 ? Math.min(100, (used / planLimit) * 100) : 0;
+  const isFree = plan === 'free';
+  const isBanda = plan === 'banda';
 
   useEffect(() => {
     setFeatured(publishedFeatured());
@@ -221,6 +267,8 @@ export function DashboardScreen() {
 
   return (
     <main className="wrap app-main page">
+      {isFree && <UpgradeBanner />}
+
       <div className="page-head">
         <div>
           <span className="eyebrow">{t('dash.eyebrow')}</span>
@@ -234,12 +282,16 @@ export function DashboardScreen() {
                 {plan === 'banda' ? t('dash.poolBanda') : t('dash.unlimited')}
               </span>
             )}
-            <span className="muted tnum" style={{ fontSize: 13 }}>{used} {t('dash.thisMonth')} {planLimit} {t('dash.thisMonth2')}</span>
+            <span className="muted tnum" style={{ fontSize: 13 }}>
+              {used} {t('dash.of')} {planLimit} {t('dash.included')}
+            </span>
             <div className="meter"><i style={{ width: `${pct}%` }} /></div>
           </div>
-          <Link href="/upload" className="btn btn-primary btn-sm">
-            <IconPlus size={15} /> {t('dash.add')}
-          </Link>
+          {plan !== 'free' && (
+            <Link href="/upload" className="btn btn-primary btn-sm">
+              <IconPlus size={15} /> {t('dash.add')}
+            </Link>
+          )}
         </div>
       </div>
 
@@ -252,7 +304,7 @@ export function DashboardScreen() {
             <div className="plus"><IconPlus size={22} /></div>
             <div style={{ fontWeight: 600 }}>{t('dash.add')}</div>
             <div className="muted" style={{ fontSize: 12.5 }}>
-              {`${left} ${left === 1 ? t('dash.newThisMonth') : t('dash.newThisMonth2')}`}
+              {`${left} ${left === 1 ? t('dash.slotsLeft') : t('dash.slotsLeft2')}`}
             </div>
           </Link>
         </div>
@@ -267,7 +319,7 @@ export function DashboardScreen() {
         </div>
       )}
 
-      <BandsSection />
+      <BandsSection isBanda={isBanda} />
 
       {featured.length > 0 && (
         <FeaturedSection items={featured} onOpen={openSong} />

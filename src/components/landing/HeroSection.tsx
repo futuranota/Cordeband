@@ -49,6 +49,13 @@ export function HeroSection() {
             {t('hero.ctaStart')} →
           </Link>
           <Link
+            href="/player?demo=banda"
+            className="btn btn-lg btn-ghost"
+            onClick={() => localStorage.setItem('cordeband_instrument', 'guitar')}
+          >
+            {t('hero.ctaDemoBanda')}
+          </Link>
+          <Link
             href="/player"
             className="btn btn-lg btn-ghost"
             onClick={() => localStorage.setItem('cordeband_instrument', 'guitar')}
