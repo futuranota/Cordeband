@@ -2,84 +2,37 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { IconArrow, IconVolume, IconMute } from '@/components/ui/icons';
 import { createClient } from '@/lib/supabase/client';
 
-const SESSION_RETRY_MS = 300;
-const SESSION_RETRY_MAX = 12;
-
-async function waitForRecoverySession(
-  client: ReturnType<typeof createClient>,
-): Promise<boolean> {
-  for (let i = 0; i < SESSION_RETRY_MAX; i++) {
-    const { data: { session } } = await client.auth.getSession();
-    if (session) return true;
-
-    const { data: { user } } = await client.auth.getUser();
-    if (user) return true;
-
-    await new Promise((r) => setTimeout(r, SESSION_RETRY_MS));
-  }
-  return false;
-}
-
 export function ResetPasswordForm() {
   const { t } = useT();
-  const searchParams = useSearchParams();
+  const router = useRouter();
+  const supabase = createClient();
+
   const [pass, setPass] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [hasSession, setHasSession] = useState(false);
-  const [expiredLink, setExpiredLink] = useState(false);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
-  const supabase = createClient();
   const minLen = 6;
   const valid = pass.length >= minLen && pass === confirm;
 
   useEffect(() => {
-    let cancelled = false;
-    const client = createClient();
-
-    if (searchParams.get('error') === 'expired') {
-      setExpiredLink(true);
-      setHasSession(false);
-      setChecking(false);
-      return;
-    }
-
-    const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
-      if (
-        session &&
-        (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION')
-      ) {
-        setHasSession(true);
-        setChecking(false);
-        setExpiredLink(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.replace('/forgot-password');
+        return;
       }
+      setReady(true);
     });
-
-    async function verifySession() {
-      const ready = await waitForRecoverySession(client);
-      if (!cancelled) {
-        setHasSession(ready);
-        setChecking(false);
-      }
-    }
-
-    void verifySession();
-
-    return () => {
-      cancelled = true;
-      subscription.unsubscribe();
-    };
-  }, [searchParams]);
+  }, [router, supabase.auth]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,47 +46,25 @@ export function ResetPasswordForm() {
     setLoading(true);
     setError('');
 
-    try {
-      const { error: updateError } = await supabase.auth.updateUser({ password: pass });
-      if (updateError) {
-        setError(updateError.message);
-        return;
-      }
+    const { error: updateError } = await supabase.auth.updateUser({ password: pass });
 
-      await supabase.auth.signOut();
-      setDone(true);
-    } catch {
-      setError(t('auth.authError'));
-    } finally {
+    if (updateError) {
+      setError(updateError.message);
       setLoading(false);
+      return;
     }
+
+    await supabase.auth.signOut();
+    setDone(true);
+    setLoading(false);
   }
 
-  if (checking) {
+  if (!ready) {
     return (
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
           <div className="auth-form auth-form-status">
             <p className="muted">{t('auth.resetSessionPending')}</p>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  if (!hasSession) {
-    return (
-      <main className="wrap app-main page">
-        <div className="auth-wrap auth-wrap-single">
-          <div className="auth-form auth-form-status">
-            <span className="eyebrow">{t('auth.resetTitle')}</span>
-            <h1 className="h2">{expiredLink ? t('auth.resetExpired') : t('auth.resetInvalid')}</h1>
-            <Link href="/forgot-password" className="btn btn-primary btn-block btn-lg auth-status-cta">
-              {t('auth.forgotPassword')}
-            </Link>
-            <Link href="/login" className="btn btn-ghost btn-block auth-secondary-cta">
-              {t('auth.backToLogin')}
-            </Link>
           </div>
         </div>
       </main>

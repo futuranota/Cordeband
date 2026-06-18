@@ -8,30 +8,27 @@ Required for password reset, email confirmation, and OAuth on **cordeband.site**
 |-------|--------|
 | **Site URL** | `https://cordeband.site` |
 | **Redirect URLs** | `https://cordeband.site/auth/callback` |
-| | `https://cordeband.site/auth/recovery` |
 | | `https://cordeband.site/reset-password` |
 
 Local development (optional):
 
 - `http://localhost:3000/auth/callback`
-- `http://localhost:3000/auth/recovery`
 - `http://localhost:3000/reset-password`
 
 ## Password reset flow
 
 1. User submits email on `/forgot-password`
-2. Email link → Supabase verify → `https://cordeband.site/auth/recovery?code=...`
-3. User clicks **Continuar para restablecer contraseña** (token is not consumed on page load — anti email prefetch)
-4. Client exchanges code → redirect to `/reset-password`
-5. User sets new password on `/reset-password`
+2. `resetPasswordForEmail` uses `redirectTo`:  
+   `https://cordeband.site/auth/callback?next=/reset-password`
+3. Email link → Supabase verify → callback exchanges `code` → sets session cookies
+4. Callback redirects to `/reset-password`
+5. `/reset-password` reads session (no token in URL) and calls `updateUser({ password })`
 
-OAuth and email confirmation still use `/auth/callback`.
+Use the default Supabase **Reset password** email template with `{{ .ConfirmationURL }}` (redirect_to must include the callback URL above).
 
-If redirect URLs are missing, Supabase falls back to Site URL and recovery breaks.
+OAuth and email signup confirmation also use `/auth/callback`.
 
 ## Env
-
-Set in Vercel and `.env.local`:
 
 ```env
 NEXT_PUBLIC_APP_URL=https://cordeband.site
