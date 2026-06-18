@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { IconArrow, IconVolume, IconMute } from '@/components/ui/icons';
 import { createClient } from '@/lib/supabase/client';
 
 export function ResetPasswordForm() {
   const { t } = useT();
+  const searchParams = useSearchParams();
   const [pass, setPass] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -15,6 +17,7 @@ export function ResetPasswordForm() {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [hasSession, setHasSession] = useState(false);
+  const [expiredLink, setExpiredLink] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
@@ -24,19 +27,58 @@ export function ResetPasswordForm() {
 
   useEffect(() => {
     let cancelled = false;
+    const client = createClient();
+
+    if (searchParams.get('error') === 'expired') {
+      setExpiredLink(true);
+      setHasSession(false);
+      setChecking(false);
+      return;
+    }
 
     async function verifySession() {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const code = searchParams.get('code');
+      if (code) {
+        const { error: exchangeError } = await client.auth.exchangeCodeForSession(code);
+        if (!exchangeError) {
+          window.history.replaceState({}, '', '/reset-password');
+          if (!cancelled) {
+            setHasSession(true);
+            setChecking(false);
+          }
+          return;
+        }
+      }
+
+      const { data: { session } } = await client.auth.getSession();
+      if (!cancelled && session) {
+        setHasSession(true);
+        setChecking(false);
+        return;
+      }
+
+      const { data: { user } } = await client.auth.getUser();
       if (!cancelled) {
         setHasSession(!!user);
         setChecking(false);
       }
     }
 
+    const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        setHasSession(true);
+        setChecking(false);
+        setExpiredLink(false);
+      }
+    });
+
     void verifySession();
-    return () => { cancelled = true; };
-  }, []);
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +113,7 @@ export function ResetPasswordForm() {
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
           <div className="auth-form auth-form-status">
-            <p className="muted">…</p>
+            <p className="muted">{t('auth.resetSessionPending')}</p>
           </div>
         </div>
       </main>
@@ -84,7 +126,7 @@ export function ResetPasswordForm() {
         <div className="auth-wrap auth-wrap-single">
           <div className="auth-form auth-form-status">
             <span className="eyebrow">{t('auth.resetTitle')}</span>
-            <h1 className="h2">{t('auth.resetInvalid')}</h1>
+            <h1 className="h2">{expiredLink ? t('auth.resetExpired') : t('auth.resetInvalid')}</h1>
             <Link href="/forgot-password" className="btn btn-primary btn-block btn-lg auth-status-cta">
               {t('auth.forgotPassword')}
             </Link>

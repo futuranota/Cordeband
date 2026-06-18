@@ -1,29 +1,82 @@
-import { createClient } from '@/lib/supabase/server';
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getProfile, shouldRedirectToProfilePending } from '@/lib/supabase/profile';
-import { NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+const ALLOWED_NEXT = new Set(['/reset-password', '/dashboard', '/profile']);
+
+function sanitizeNext(raw: string | null): string {
+  if (!raw) return '/dashboard';
+  const path = raw.startsWith('/') ? raw.split('?')[0] : `/${raw.split('?')[0]}`;
+  return ALLOWED_NEXT.has(path) ? path : '/dashboard';
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const next = sanitizeNext(searchParams.get('next'));
+  const isRecovery = next === '/reset-password';
 
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (!code) {
+    if (isRecovery) {
+      return NextResponse.redirect(`${origin}/reset-password?error=expired`);
+    }
+    return NextResponse.redirect(`${origin}/login?error=auth`);
+  }
 
-    if (!error) {
-      const { data: { user } } = await supabase.auth.getUser();
+  let redirectPath = next;
+  let response = NextResponse.redirect(`${origin}${redirectPath}`);
 
-      if (user) {
-        const profile = await getProfile(supabase, user.id);
-        if (shouldRedirectToProfilePending(profile)) {
-          return NextResponse.redirect(`${origin}/profile`);
-        }
-      }
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
+          response = NextResponse.redirect(`${origin}${redirectPath}`);
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    },
+  );
 
-      return NextResponse.redirect(`${origin}${next}`);
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (error) {
+    if (isRecovery) {
+      return NextResponse.redirect(`${origin}/reset-password?error=expired`);
+    }
+    return NextResponse.redirect(`${origin}/login?error=auth`);
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (user && redirectPath !== '/reset-password') {
+    const profile = await getProfile(supabase, user.id);
+    if (shouldRedirectToProfilePending(profile)) {
+      redirectPath = '/profile';
+      const profileResponse = NextResponse.redirect(`${origin}${redirectPath}`);
+      response.cookies.getAll().forEach((cookie) => {
+        profileResponse.cookies.set(cookie.name, cookie.value);
+      });
+      return profileResponse;
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth`);
+  if (redirectPath !== next) {
+    const updated = NextResponse.redirect(`${origin}${redirectPath}`);
+    response.cookies.getAll().forEach((cookie) => {
+      updated.cookies.set(cookie.name, cookie.value);
+    });
+    return updated;
+  }
+
+  return response;
 }
