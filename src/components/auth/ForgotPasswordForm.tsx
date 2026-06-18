@@ -46,10 +46,11 @@ export function ForgotPasswordForm() {
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
           <div className="auth-form" style={{ textAlign: 'center' }}>
-            <span className="eyebrow">{t('auth.resetEmailSent')}</span>
+            <span className="eyebrow">{t('auth.resetEmailEyebrow')}</span>
             <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.resetEmailSent')}</h1>
             <p className="lead" style={{ fontSize: 15, marginTop: 12 }}>{t('auth.resetEmailSentSub')}</p>
             <p className="muted" style={{ marginTop: 16, fontSize: 14 }}>{email}</p>
+            <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>{t('auth.resetEmailSpam')}</p>
             <Link href="/login" className="btn btn-primary btn-block btn-lg" style={{ marginTop: 28 }}>
               {t('auth.backToLogin')}
             </Link>
