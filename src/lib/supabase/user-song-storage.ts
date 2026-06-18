@@ -28,6 +28,15 @@ export async function uploadUserOriginal(
   if (error) throw error;
 }
 
+export async function uploadStemWav(path: string, wavBuffer: Buffer): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.storage.from(BUCKET).upload(path, wavBuffer, {
+    contentType: 'audio/wav',
+    upsert: true,
+  });
+  if (error) throw error;
+}
+
 export async function removeUserStorageFiles(paths: string[]) {
   if (!paths.length) return;
   const admin = createAdminClient();

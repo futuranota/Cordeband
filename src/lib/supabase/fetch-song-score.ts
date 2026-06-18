@@ -4,6 +4,7 @@ import { SCORE, staffPos, midiToTab, type InstrumentKey, type ScoreNote } from '
 export type SongScore = {
   notes: ScoreNote[];
   totalBeats: number;
+  fromDb: boolean;
 };
 
 function asScoreNote(raw: unknown): ScoreNote | null {
@@ -26,7 +27,7 @@ function asScoreNote(raw: unknown): ScoreNote | null {
 
 export function buildScoreFromNotes(rawNotes: unknown): SongScore {
   if (!Array.isArray(rawNotes) || rawNotes.length === 0) {
-    return { notes: SCORE.notes, totalBeats: SCORE.totalBeats };
+    return { notes: SCORE.notes, totalBeats: SCORE.totalBeats, fromDb: false };
   }
 
   const notes = rawNotes
@@ -35,11 +36,11 @@ export function buildScoreFromNotes(rawNotes: unknown): SongScore {
     .sort((a, b) => a.beat - b.beat);
 
   if (!notes.length) {
-    return { notes: SCORE.notes, totalBeats: SCORE.totalBeats };
+    return { notes: SCORE.notes, totalBeats: SCORE.totalBeats, fromDb: false };
   }
 
   const totalBeats = notes.reduce((max, n) => Math.max(max, n.beat + n.dur), 0);
-  return { notes, totalBeats: Math.max(totalBeats, 1) };
+  return { notes, totalBeats: Math.max(totalBeats, 1), fromDb: true };
 }
 
 export async function fetchSongScore(

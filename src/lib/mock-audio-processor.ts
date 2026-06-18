@@ -1,9 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createSilentWavBuffer } from '@/lib/audio/wav-placeholder';
 import { CATALOG_INSTRUMENTS } from '@/types/catalog';
 import { SCORE } from '@/lib/data';
-import { userStemPath } from '@/lib/supabase/user-song-storage';
+import { uploadStemWav, userStemPath } from '@/lib/supabase/user-song-storage';
 
 const STEMS_TTL_MS = 48 * 60 * 60 * 1000;
+const PLACEHOLDER_WAV_SECS = 30;
 
 function buildNotesForInstrument(instrument: string) {
   const notes = SCORE.notes.slice(0, 32).map((n) => ({
@@ -63,15 +65,18 @@ async function runMockProcessor(
     const mockBpm = 96 + Math.floor(Math.random() * 40);
     const mockKeys = ['Do mayor', 'La menor', 'Mi mayor', 'Re menor', 'Sol mayor'];
     const keySig = mockKeys[Math.floor(Math.random() * mockKeys.length)];
+    const placeholderWav = createSilentWavBuffer(PLACEHOLDER_WAV_SECS);
 
     for (const instrument of CATALOG_INSTRUMENTS) {
       const storagePath = options.stemPath(songId, instrument);
+      await uploadStemWav(storagePath, placeholderWav);
+
       const { data: stem, error: stemErr } = await admin
         .from('stems')
         .insert({
           song_id: songId,
           instrument_type: instrument,
-          storage_url: `mock://${songId}/${instrument}.wav`,
+          storage_url: null,
           storage_path: storagePath,
         })
         .select('id')

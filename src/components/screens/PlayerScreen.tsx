@@ -29,12 +29,15 @@ import {
 import { normalizePlan } from '@/lib/supabase/profile';
 import { StagePanel } from '@/components/player/StagePanel';
 import { SheetViewer } from '@/components/player/SheetViewer';
+import { AlphaTabViewer } from '@/components/player/AlphaTabViewer';
 import { BandSessionPanel } from '@/components/player/BandSessionPanel';
 import { BandTurnOverlay } from '@/components/player/BandTurnOverlay';
 import { BandTimeline } from '@/components/player/BandTimeline';
 import { useBandTurnOverlay } from '@/hooks/useBandTurnOverlay';
 import { useBandRoom } from '@/hooks/useBandRoom';
 import { useBandSync } from '@/hooks/useBandSync';
+import { usePlayerAudio } from '@/hooks/usePlayerAudio';
+import { notesToAlphaTex } from '@/lib/alphatab/notes-to-alphatex';
 import {
   buildDemoBandRoom,
   buildDemoBandViewer,
@@ -291,7 +294,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const { user, profile, isAdmin } = useSession();
 
   const [song, setSong] = useState<Song | null>(null);
-  const [score, setScore] = useState<SongScore>({ notes: SCORE.notes, totalBeats: SCORE.totalBeats });
+  const [score, setScore] = useState<SongScore>({ notes: SCORE.notes, totalBeats: SCORE.totalBeats, fromDb: false });
   const [songLoading, setSongLoading] = useState(true);
 
   const [instrument, setInstrument] = useState<InstrumentKey>('guitar');
@@ -324,6 +327,34 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const bpm = S.bpm || 84;
   const total = score.totalBeats;
 
+  const useRealAudio = !isDemo && !!resolvedSongId && !isBandView;
+
+  const audio = usePlayerAudio({
+    enabled: useRealAudio,
+    songId: resolvedSongId,
+    bpm,
+    totalBeats: total,
+    instrument,
+    vols,
+    tempo,
+    loop,
+  });
+
+  const soloPlaying = useRealAudio ? audio.playing : playing;
+  const soloCurBeat = useRealAudio ? audio.curBeat : curBeat;
+  const displayLoading = isDemo ? loading : (useRealAudio ? audio.audioLoading : false);
+
+  const alphaTex = useMemo(() => {
+    if (isDemo || !score.fromDb) return null;
+    try {
+      return notesToAlphaTex(S.title, bpm, instrument, score.notes);
+    } catch {
+      return null;
+    }
+  }, [isDemo, score.fromDb, score.notes, S.title, bpm, instrument]);
+
+  const useAlphaTab = !isDemo && score.fromDb && !!alphaTex;
+
   const bandRoom = useBandRoom({
     enabled: liveBandSession,
     userId: user?.id ?? null,
@@ -355,7 +386,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   useEffect(() => {
     if (isDemo) {
       setSong(DEMO_SONG);
-      setScore({ notes: SCORE.notes, totalBeats: SCORE.totalBeats });
+      setScore({ notes: SCORE.notes, totalBeats: SCORE.totalBeats, fromDb: false });
       setSongLoading(false);
       return;
     }
@@ -427,15 +458,35 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   tempoRef.current = tempo;
   partsRef.current = partWindows;
 
-  useEffect(() => { beatRef.current = curBeat; }, [curBeat]);
+  useEffect(() => {
+    if (!useRealAudio) beatRef.current = curBeat;
+  }, [curBeat, useRealAudio]);
 
   useEffect(() => {
-    if (songLoading) return;
+    if (!isDemo || songLoading) return;
     const id = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(id);
-  }, [songLoading]);
+  }, [isDemo, songLoading]);
 
   useEffect(() => {
+    if (useRealAudio) beatRef.current = audio.curBeat;
+  }, [useRealAudio, audio.curBeat]);
+
+  const prevSoloBeatRef = useRef(0);
+  useEffect(() => {
+    if (!soloPlaying || isBandView) return;
+    const b = soloCurBeat;
+    const prev = prevSoloBeatRef.current;
+    const mid = (prev + b) / 2;
+    if (partsRef.current.some((p) => mid >= p.startBeat && mid < p.endBeat) && b > prev) {
+      yourBeatsRef.current += b - prev;
+      setYourTime(yourBeatsRef.current * 60 / bpm);
+    }
+    prevSoloBeatRef.current = b;
+  }, [soloPlaying, soloCurBeat, bpm, isBandView]);
+
+  useEffect(() => {
+    if (useRealAudio) return;
     if (!playing || (isBandView && !useLocalBandClock)) return;
     let raf: number;
     let last = performance.now();
@@ -463,15 +514,15 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, bpm, total, isBandView, useLocalBandClock]);
+  }, [playing, bpm, total, isBandView, useLocalBandClock, useRealAudio]);
 
   const effectivePlaying = isBandView && !useLocalBandClock
     ? bandRoom.room?.status === 'playing'
-    : playing;
+    : soloPlaying;
 
   const effectiveCurBeat = isBandView && !useLocalBandClock
     ? bandSync.curBeat
-    : curBeat;
+    : soloCurBeat;
 
   const syncReady = !isBandView || useLocalBandClock || bandSync.synced;
 
@@ -582,6 +633,11 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     const r = el.getBoundingClientRect();
     const rt = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
     const b = rt * total;
+    if (useRealAudio) {
+      audio.seek(b);
+      beatRef.current = b;
+      return;
+    }
     beatRef.current = b;
     setCurBeat(b);
   };
@@ -598,10 +654,11 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   };
 
   const loopClick = () => {
+    const loopBeat = isBandView ? effectiveCurBeat : soloCurBeat;
     if (loop) { setLoop(null); setPendingA(null); return; }
-    if (pendingA === null) { setPendingA(curBeat); return; }
-    const a = Math.min(pendingA, curBeat);
-    const b = Math.max(pendingA, curBeat);
+    if (pendingA === null) { setPendingA(loopBeat); return; }
+    const a = Math.min(pendingA, loopBeat);
+    const b = Math.max(pendingA, loopBeat);
     if (b - a < 1) { setPendingA(null); return; }
     setLoop({ a, b });
     setPendingA(null);
@@ -639,6 +696,11 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       return;
     }
 
+    if (useRealAudio) {
+      await audio.toggle();
+      return;
+    }
+
     setPlaying((p) => {
       const next = !p;
       if (isBandView && useLocalBandClock) {
@@ -658,6 +720,50 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const instrumentHref = resolvedSongId
     ? `/instrument?songId=${encodeURIComponent(resolvedSongId)}`
     : '/instrument';
+
+  const renderSheet = (
+    curBeatVal: number,
+    playingVal: boolean,
+    waitingVal: boolean,
+  ) => {
+    const sheetProps = {
+      view,
+      curBeat: curBeatVal,
+      loop,
+      loading: displayLoading,
+      waiting: waitingVal && !displayLoading && playingVal,
+      waitLabel: t('player.waitOverlay'),
+      notes: score.notes,
+      totalBeats: score.totalBeats,
+    };
+
+    if (useAlphaTab && alphaTex && view !== 'roll') {
+      return (
+        <AlphaTabViewer
+          alphaTex={alphaTex}
+          curBeat={curBeatVal}
+          loading={sheetProps.loading}
+          waiting={sheetProps.waiting}
+          waitLabel={sheetProps.waitLabel}
+          fallback={<SheetViewer {...sheetProps} />}
+        />
+      );
+    }
+
+    return <SheetViewer {...sheetProps} />;
+  };
+
+  const restartPlayback = () => {
+    if (useRealAudio) {
+      audio.seek(0);
+    } else {
+      beatRef.current = 0;
+      setCurBeat(0);
+    }
+    yourBeatsRef.current = 0;
+    setYourTime(0);
+    prevSoloBeatRef.current = 0;
+  };
 
   if (songLoading || (!isDemo && !song)) {
     return (
@@ -765,23 +871,14 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 youInstrument={inst}
               />
 
-              <SheetViewer
-                view={view}
-                curBeat={effectiveCurBeat}
-                loop={loop}
-                loading={loading}
-                waiting={isWaiting && !loading && effectivePlaying}
-                waitLabel={t('player.waitOverlay')}
-                notes={score.notes}
-                totalBeats={score.totalBeats}
-              />
+              {renderSheet(effectiveCurBeat, effectivePlaying, isWaiting)}
 
               <div className="card transport">
                 <div className="transport-row">
                   <button
                     type="button"
                     className="play-btn"
-                    disabled={loading || (liveBandSession && bandRoom.isLive && !bandRoom.isLeader)}
+                    disabled={displayLoading || (liveBandSession && bandRoom.isLive && !bandRoom.isLeader)}
                     onClick={togglePlaying}
                     title={liveBandSession && bandRoom.isLive && !bandRoom.isLeader ? t('room.waitingLeader') : undefined}
                   >
@@ -808,7 +905,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                   {(loop || pendingA !== null) && (
                     <button type="button" className="chip-btn" onClick={() => { setLoop(null); setPendingA(null); }}>{t('player.remove')}</button>
                   )}
-                  <button type="button" className="chip-btn" onClick={() => { beatRef.current = 0; setCurBeat(0); yourBeatsRef.current = 0; setYourTime(0); }}>
+                  <button type="button" className="chip-btn" onClick={restartPlayback}>
                     <IconReset size={14} /> {t('player.restart')}
                   </button>
                   <div className="grow" />
@@ -856,22 +953,24 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
             <TurnBanner status={status} secsToEntry={secsToEntry} yourTime={yourTime} />
 
-            <SheetViewer
-              view={view}
-              curBeat={curBeat}
-              loop={loop}
-              loading={loading}
-              waiting={isWaiting && !loading && playing}
-              waitLabel={t('player.waitOverlay')}
-              notes={score.notes}
-              totalBeats={score.totalBeats}
-            />
+            {useRealAudio && audio.audioError && (
+              <div className="card" style={{ marginBottom: 12, borderColor: 'var(--warn, #e8a838)' }}>
+                <p style={{ margin: 0, fontSize: 13.5 }}>{audio.audioError}</p>
+                {audio.audioError.toLowerCase().includes('expired') && (
+                  <Link href="/upload" className="btn btn-primary btn-sm" style={{ marginTop: 10 }}>
+                    {t('dash.reactivate')}
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {renderSheet(soloCurBeat, soloPlaying, isWaiting)}
 
             <div className="card transport">
               <div className="transport-row">
-                <button type="button" className="play-btn" disabled={loading}
+                <button type="button" className="play-btn" disabled={displayLoading || (useRealAudio && !audio.audioReady && !audio.audioError)}
                   onClick={togglePlaying}>
-                  {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
+                  {soloPlaying ? <IconPause size={20} /> : <IconPlay size={20} />}
                 </button>
                 <span className="time">{fmtTime(curTime)}</span>
                 <div className="scrub" ref={scrubRef} onPointerDown={onScrubDown}>
@@ -894,7 +993,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 {(loop || pendingA !== null) && (
                   <button type="button" className="chip-btn" onClick={() => { setLoop(null); setPendingA(null); }}>{t('player.remove')}</button>
                 )}
-                <button type="button" className="chip-btn" onClick={() => { beatRef.current = 0; setCurBeat(0); yourBeatsRef.current = 0; setYourTime(0); }}>
+                <button type="button" className="chip-btn" onClick={restartPlayback}>
                   <IconReset size={14} /> {t('player.restart')}
                 </button>
                 <div className="grow" />
