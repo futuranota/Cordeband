@@ -11,6 +11,9 @@ create table if not exists public.profiles (
     check (intended_plan is null or intended_plan in ('free', 'pro', 'banda')),
   songs_used_this_month integer not null default 0,
   stripe_customer_id text,
+  address_line text,
+  city text,
+  postal_code text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -18,12 +21,18 @@ create table if not exists public.profiles (
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.profiles (id, email, full_name, intended_plan)
+  insert into public.profiles (
+    id, email, full_name, intended_plan,
+    address_line, city, postal_code
+  )
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
-    nullif(new.raw_user_meta_data->>'intended_plan', '')
+    nullif(new.raw_user_meta_data->>'intended_plan', ''),
+    nullif(new.raw_user_meta_data->>'address_line', ''),
+    nullif(new.raw_user_meta_data->>'city', ''),
+    nullif(new.raw_user_meta_data->>'postal_code', '')
   );
   return new;
 end;

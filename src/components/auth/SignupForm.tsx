@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
-import { IconCheck, IconVolume, IconMute, IconArrow, IconNote } from '@/components/ui/icons';
+import { IconCheck, IconVolume, IconMute, IconArrow, IconArrowL, IconNote } from '@/components/ui/icons';
 import { createClient } from '@/lib/supabase/client';
 import { getProfile, shouldRedirectToProfilePending } from '@/lib/supabase/profile';
 import {
@@ -15,6 +15,7 @@ import {
 } from '@/lib/plans';
 
 type Mode = 'signup' | 'login';
+type SignupStep = 1 | 2;
 
 function planBadgeLabel(t: (k: string) => string, plan: PlanId): string {
   if (plan === 'pro') return `${t('auth.planBadgePro')} · ${PLAN_PRICE.pro}${t('common.perMonth')}`;
@@ -38,6 +39,10 @@ function submitLabel(t: (k: string) => string, isLogin: boolean, plan: PlanId): 
   return t('auth.create');
 }
 
+function stepLabel(t: (k: string) => string, step: number, total: number): string {
+  return t('auth.stepIndicator').replace('{step}', String(step)).replace('{total}', String(total));
+}
+
 export function SignupForm({ mode }: { mode: Mode }) {
   const { t, tList } = useT();
   const router = useRouter();
@@ -45,17 +50,23 @@ export function SignupForm({ mode }: { mode: Mode }) {
   const isLogin = mode === 'login';
   const selectedPlan = isLogin ? 'free' : parsePlanParam(searchParams.get('plan'));
 
+  const [signupStep, setSignupStep] = useState<SignupStep>(1);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
+  const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
   const [error, setError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
 
   const valid = (isLogin || name.trim().length > 1) && /\S+@\S+\.\S+/.test(email) && pass.length >= 6;
+  const locationValid = city.trim().length >= 2 && postalCode.trim().length >= 3;
   const aside = planAsideTitle(t, tList, selectedPlan);
   const supabase = createClient();
+  const onLocationStep = !isLogin && signupStep === 2;
 
   async function redirectAfterSession() {
     localStorage.removeItem('cordeband_state_v1');
@@ -85,36 +96,26 @@ export function SignupForm({ mode }: { mode: Mode }) {
     if (oauthError) setError(oauthError.message);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!valid) return;
+  async function performSignUp() {
     setLoading(true);
     setError('');
 
     try {
-      if (isLogin) {
-        const { error: loginError } = await supabase.auth.signInWithPassword({
-          email,
-          password: pass,
-        });
-        if (loginError) {
-          setError(loginError.message);
-          return;
-        }
-        await redirectAfterSession();
-        return;
-      }
-
       const origin = window.location.origin;
+      const metadata: Record<string, string | null> = {
+        full_name: name.trim(),
+        intended_plan: isPaidPlan(selectedPlan) ? selectedPlan : null,
+        city: city.trim(),
+        postal_code: postalCode.trim(),
+        address_line: null,
+      };
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password: pass,
         options: {
           emailRedirectTo: `${origin}/auth/callback`,
-          data: {
-            full_name: name.trim(),
-            intended_plan: isPaidPlan(selectedPlan) ? selectedPlan : null,
-          },
+          data: metadata,
         },
       });
 
@@ -136,6 +137,95 @@ export function SignupForm({ mode }: { mode: Mode }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleUseLocation() {
+    if (!navigator.geolocation) {
+      setError(t('auth.locationError'));
+      return;
+    }
+
+    setGeoLoading(true);
+    setError('');
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          timeout: 15000,
+          maximumAge: 60000,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      const res = await fetch(
+        `/api/geocode/reverse?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`,
+      );
+
+      if (!res.ok) {
+        setError(t('auth.locationError'));
+        return;
+      }
+
+      const data = (await res.json()) as {
+        city?: string | null;
+        postalCode?: string | null;
+      };
+
+      if (data.city) setCity(data.city);
+      if (data.postalCode) setPostalCode(data.postalCode);
+
+      if (!data.city && !data.postalCode) {
+        setError(t('auth.locationError'));
+      }
+    } catch (err) {
+      const geoErr = err as GeolocationPositionError;
+      if (geoErr?.code === 1) {
+        setError(t('auth.locationDenied'));
+      } else {
+        setError(t('auth.locationError'));
+      }
+    } finally {
+      setGeoLoading(false);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid || loading) return;
+
+    if (isLogin) {
+      setLoading(true);
+      setError('');
+      try {
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password: pass,
+        });
+        if (loginError) {
+          setError(loginError.message);
+          return;
+        }
+        await redirectAfterSession();
+      } catch {
+        setError(t('auth.authError'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (signupStep === 1) {
+      setSignupStep(2);
+      setError('');
+      return;
+    }
+
+    if (!locationValid) {
+      setError(t('auth.locationRequired'));
+      return;
+    }
+
+    await performSignUp();
   }
 
   if (emailSent) {
@@ -161,98 +251,177 @@ export function SignupForm({ mode }: { mode: Mode }) {
     <main className="wrap app-main page">
       <div className={`auth-wrap${isLogin ? ' auth-wrap-single' : ''}`}>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <span className="eyebrow">{isLogin ? t('nav.login') : t('auth.eyebrow')}</span>
-          <h1 className="h2">{isLogin ? t('nav.login') : t('auth.title')}</h1>
-          <p className="lead">{t('auth.sub')}</p>
-
-          {!isLogin && isPaidPlan(selectedPlan) && (
-            <div className="auth-plan-badge auth-plan-badge-inline">
-              {planBadgeLabel(t, selectedPlan)}
-            </div>
-          )}
-
           {!isLogin && (
-            <div className="auth-field">
-              <label className="field-label">{t('auth.name')}</label>
-              <input
-                className="input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t('auth.namePh')}
-                autoComplete="name"
-              />
-            </div>
+            <p className="auth-step-indicator">{stepLabel(t, signupStep, 2)}</p>
           )}
 
-          <div className="auth-field">
-            <label className="field-label">{t('auth.email')}</label>
-            <input
-              className="input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t('auth.emailPh')}
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="auth-field">
-            <label className="field-label">{t('auth.pass')}</label>
-            <div className="pwfield">
-              <input
-                className="input"
-                type={showPass ? 'text' : 'password'}
-                value={pass}
-                onChange={(e) => setPass(e.target.value)}
-                placeholder={t('auth.passPh')}
-                autoComplete={isLogin ? 'current-password' : 'new-password'}
-              />
+          {onLocationStep ? (
+            <>
               <button
                 type="button"
-                className="pwtoggle"
-                onClick={() => setShowPass((s) => !s)}
-                aria-label="Mostrar contraseña"
+                className="btn btn-ghost btn-sm auth-back-btn"
+                onClick={() => { setSignupStep(1); setError(''); }}
               >
-                {showPass ? <IconMute size={17} /> : <IconVolume size={17} />}
+                <IconArrowL size={15} /> {t('auth.locationBack')}
               </button>
-            </div>
-            {isLogin && (
-              <Link
-                href="/forgot-password"
-                className="auth-link auth-forgot-link"
+
+              <span className="eyebrow">{t('auth.locationEyebrow')}</span>
+              <h1 className="h2">{t('auth.locationTitle')}</h1>
+              <p className="lead">{t('auth.locationSub')}</p>
+              <p className="muted auth-location-privacy">{t('auth.locationPrivacy')}</p>
+
+              <button
+                type="button"
+                className="btn btn-ghost btn-block"
+                disabled={geoLoading || loading}
+                onClick={() => void handleUseLocation()}
+                style={{ marginBottom: 16 }}
               >
-                {t('auth.forgotPassword')}
-              </Link>
-            )}
-          </div>
+                {geoLoading ? '…' : t('auth.useLocation')}
+              </button>
+
+              <div className="auth-field">
+                <label className="field-label required">{t('auth.city')}</label>
+                <input
+                  className="input"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder={t('auth.cityPh')}
+                  autoComplete="address-level2"
+                  required
+                  aria-required="true"
+                />
+              </div>
+
+              <div className="auth-field">
+                <label className="field-label required">{t('auth.postalCode')}</label>
+                <input
+                  className="input"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  placeholder={t('auth.postalCodePh')}
+                  autoComplete="postal-code"
+                  required
+                  aria-required="true"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="eyebrow">{isLogin ? t('nav.login') : t('auth.eyebrow')}</span>
+              <h1 className="h2">{isLogin ? t('nav.login') : t('auth.title')}</h1>
+              <p className="lead">{t('auth.sub')}</p>
+
+              {!isLogin && isPaidPlan(selectedPlan) && (
+                <div className="auth-plan-badge auth-plan-badge-inline">
+                  {planBadgeLabel(t, selectedPlan)}
+                </div>
+              )}
+
+              {!isLogin && (
+                <div className="auth-field">
+                  <label className="field-label">{t('auth.name')}</label>
+                  <input
+                    className="input"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('auth.namePh')}
+                    autoComplete="name"
+                  />
+                </div>
+              )}
+
+              <div className="auth-field">
+                <label className="field-label">{t('auth.email')}</label>
+                <input
+                  className="input"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t('auth.emailPh')}
+                  autoComplete="email"
+                />
+              </div>
+
+              <div className="auth-field">
+                <label className="field-label">{t('auth.pass')}</label>
+                <div className="pwfield">
+                  <input
+                    className="input"
+                    type={showPass ? 'text' : 'password'}
+                    value={pass}
+                    onChange={(e) => setPass(e.target.value)}
+                    placeholder={t('auth.passPh')}
+                    autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  />
+                  <button
+                    type="button"
+                    className="pwtoggle"
+                    onClick={() => setShowPass((s) => !s)}
+                    aria-label="Mostrar contraseña"
+                  >
+                    {showPass ? <IconMute size={17} /> : <IconVolume size={17} />}
+                  </button>
+                </div>
+                {isLogin && (
+                  <Link href="/forgot-password" className="auth-link auth-forgot-link">
+                    {t('auth.forgotPassword')}
+                  </Link>
+                )}
+              </div>
+            </>
+          )}
 
           {error && (
             <p style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 12 }}>{error}</p>
           )}
 
-          <button
-            type="submit"
-            className="btn btn-primary btn-block btn-lg"
-            disabled={!valid || loading}
-            style={{ marginTop: 8 }}
-          >
-            {loading ? '…' : submitLabel(t, isLogin, selectedPlan)} <IconArrow size={17} />
-          </button>
+          {onLocationStep ? (
+            <div className="auth-location-actions">
+              <button
+                type="submit"
+                className="btn btn-primary btn-block btn-lg"
+                disabled={loading || !locationValid}
+              >
+                {loading ? '…' : submitLabel(t, false, selectedPlan)} <IconArrow size={17} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block btn-lg"
+                disabled={!valid || loading}
+                style={{ marginTop: 8 }}
+              >
+                {loading
+                  ? '…'
+                  : isLogin
+                    ? submitLabel(t, true, selectedPlan)
+                    : t('auth.continueSignup')}{' '}
+                <IconArrow size={17} />
+              </button>
 
-          <div className="auth-sep">{t('auth.or')}</div>
-          <div className="auth-oauth">
-            <button type="button" className="btn btn-ghost btn-block" onClick={() => handleOAuth('google')}>
-              {t('auth.google')}
-            </button>
-          </div>
+              {!isLogin && (
+                <>
+                  <div className="auth-sep">{t('auth.or')}</div>
+                  <div className="auth-oauth">
+                    <button type="button" className="btn btn-ghost btn-block" onClick={() => handleOAuth('google')}>
+                      {t('auth.google')}
+                    </button>
+                  </div>
+                </>
+              )}
 
-          <div className="auth-foot">
-            <span>{t('auth.have')} </span>
-            <Link href={isLogin ? '/signup' : '/login'} className="auth-link">
-              {isLogin ? t('nav.start') : t('auth.loginLink')}
-            </Link>
-          </div>
-          <p className="muted auth-terms">{t('auth.terms')}</p>
+              <div className="auth-foot">
+                <span>{t('auth.have')} </span>
+                <Link href={isLogin ? '/signup' : '/login'} className="auth-link">
+                  {isLogin ? t('nav.start') : t('auth.loginLink')}
+                </Link>
+              </div>
+              <p className="muted auth-terms">{t('auth.terms')}</p>
+            </>
+          )}
         </form>
 
         {!isLogin && (
