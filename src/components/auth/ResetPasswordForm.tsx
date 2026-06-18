@@ -7,6 +7,24 @@ import { useT } from '@/i18n/context';
 import { IconArrow, IconVolume, IconMute } from '@/components/ui/icons';
 import { createClient } from '@/lib/supabase/client';
 
+const SESSION_RETRY_MS = 300;
+const SESSION_RETRY_MAX = 12;
+
+async function waitForRecoverySession(
+  client: ReturnType<typeof createClient>,
+): Promise<boolean> {
+  for (let i = 0; i < SESSION_RETRY_MAX; i++) {
+    const { data: { session } } = await client.auth.getSession();
+    if (session) return true;
+
+    const { data: { user } } = await client.auth.getUser();
+    if (user) return true;
+
+    await new Promise((r) => setTimeout(r, SESSION_RETRY_MS));
+  }
+  return false;
+}
+
 export function ResetPasswordForm() {
   const { t } = useT();
   const searchParams = useSearchParams();
@@ -36,41 +54,24 @@ export function ResetPasswordForm() {
       return;
     }
 
-    async function verifySession() {
-      const code = searchParams.get('code');
-      if (code) {
-        const { error: exchangeError } = await client.auth.exchangeCodeForSession(code);
-        if (!exchangeError) {
-          window.history.replaceState({}, '', '/reset-password');
-          if (!cancelled) {
-            setHasSession(true);
-            setChecking(false);
-          }
-          return;
-        }
-      }
-
-      const { data: { session } } = await client.auth.getSession();
-      if (!cancelled && session) {
-        setHasSession(true);
-        setChecking(false);
-        return;
-      }
-
-      const { data: { user } } = await client.auth.getUser();
-      if (!cancelled) {
-        setHasSession(!!user);
-        setChecking(false);
-      }
-    }
-
     const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' && session) {
+      if (
+        session &&
+        (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION')
+      ) {
         setHasSession(true);
         setChecking(false);
         setExpiredLink(false);
       }
     });
+
+    async function verifySession() {
+      const ready = await waitForRecoverySession(client);
+      if (!cancelled) {
+        setHasSession(ready);
+        setChecking(false);
+      }
+    }
 
     void verifySession();
 

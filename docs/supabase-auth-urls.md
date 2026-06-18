@@ -8,21 +8,26 @@ Required for password reset, email confirmation, and OAuth on **cordeband.site**
 |-------|--------|
 | **Site URL** | `https://cordeband.site` |
 | **Redirect URLs** | `https://cordeband.site/auth/callback` |
+| | `https://cordeband.site/auth/recovery` |
 | | `https://cordeband.site/reset-password` |
 
 Local development (optional):
 
 - `http://localhost:3000/auth/callback`
+- `http://localhost:3000/auth/recovery`
 - `http://localhost:3000/reset-password`
 
 ## Password reset flow
 
 1. User submits email on `/forgot-password`
-2. Email link → Supabase verify → `https://cordeband.site/auth/callback?code=...&next=/reset-password`
-3. Callback exchanges code, sets session cookies, redirects to `/reset-password`
-4. User sets new password on `/reset-password`
+2. Email link → Supabase verify → `https://cordeband.site/auth/recovery?code=...`
+3. User clicks **Continuar para restablecer contraseña** (token is not consumed on page load — anti email prefetch)
+4. Client exchanges code → redirect to `/reset-password`
+5. User sets new password on `/reset-password`
 
-If redirect URLs are missing, Supabase falls back to Site URL and recovery breaks (often lands on `/login`).
+OAuth and email confirmation still use `/auth/callback`.
+
+If redirect URLs are missing, Supabase falls back to Site URL and recovery breaks.
 
 ## Env
 
