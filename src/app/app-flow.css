@@ -58,6 +58,7 @@
   border:1px solid var(--line); border-radius:18px; overflow:hidden; box-shadow:var(--shadow-lg); }
 .auth-wrap-single{ grid-template-columns:1fr; max-width:480px; }
 .auth-form{ padding:clamp(32px,5vw,52px); background:var(--elev); }
+.auth-form-status{ padding-top:max(30px,clamp(36px,6vw,52px)); }
 .auth-aside{
   padding:clamp(32px,5vw,52px); position:relative; overflow:hidden;
   background:linear-gradient(165deg, #173f4d, #0d1f2e);

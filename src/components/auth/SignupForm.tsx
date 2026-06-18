@@ -142,7 +142,7 @@ export function SignupForm({ mode }: { mode: Mode }) {
     return (
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
-          <div className="auth-form" style={{ textAlign: 'center' }}>
+          <div className="auth-form auth-form-status" style={{ textAlign: 'center' }}>
             <span className="eyebrow">{t('auth.checkEmailEyebrow')}</span>
             <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.checkEmail')}</h1>
             <p className="lead" style={{ fontSize: 15, marginTop: 12 }}>{t('auth.checkEmailSub')}</p>
