@@ -9,6 +9,8 @@ import {
   STEMS, LIBRARY, SCORE, fmtTime, getAffiliates,
   INSTRUMENTS, type InstrumentKey, type Song, type AffiliateProduct,
 } from '@/lib/data';
+import { fetchSongById, readActiveSongId, saveActiveSongId } from '@/lib/supabase/fetch-song';
+import { fetchSongScore, type SongScore } from '@/lib/supabase/fetch-song-score';
 import { DEMO_BAND_MEMBERS } from '@/lib/demo-band';
 import { toUiBandMember, memberDisplayName, viewerMember } from '@/lib/band-room';
 import {
@@ -40,13 +42,14 @@ import {
   demoBandMembersAsRows,
 } from '@/lib/demo-band-room';
 import { buildTimelineLanes } from '@/lib/band-timeline';
+import { ClassicLoader } from '@/components/ui/ClassicLoader';
 import {
   IconPlay, IconPause, IconArrow, IconArrowL, IconLoop, IconGauge, IconVolume, IconMute,
   IconWave, IconSpark, IconClock, IconCheck, IconReset, IconUpload, IconExternal, IconCart,
   IconCrown, IconBand, IconRotate,
 } from '@/components/ui/icons';
 
-const SONG = LIBRARY[0];
+const DEMO_SONG = LIBRARY[0];
 const DEF_VOL: Record<string, number> = { vocals: 78, drums: 82, bass: 80, piano: 70, guitar: 76, other: 64 };
 
 function readInstrument(): InstrumentKey {
@@ -285,10 +288,11 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const { t } = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, profile } = useSession();
-  const S = SONG;
-  const bpm = S.bpm || 84;
-  const total = SCORE.totalBeats;
+  const { user, profile, isAdmin } = useSession();
+
+  const [song, setSong] = useState<Song | null>(null);
+  const [score, setScore] = useState<SongScore>({ notes: SCORE.notes, totalBeats: SCORE.totalBeats });
+  const [songLoading, setSongLoading] = useState(true);
 
   const [instrument, setInstrument] = useState<InstrumentKey>('guitar');
   const [loading, setLoading] = useState(true);
@@ -305,7 +309,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const [bandPlayStartedAt, setBandPlayStartedAt] = useState<string | null>(null);
 
   const isDemo = !user;
-  const plan = normalizePlan(profile?.plan);
+  const plan = isAdmin ? 'banda' : normalizePlan(profile?.plan);
   const showModeToggle = canTogglePlayerMode({ isDemo, plan });
   const bandRoomQueryId = searchParams.get('room');
   const bandRoomQueryCode = searchParams.get('code');
@@ -315,11 +319,16 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const leaderInstrument: InstrumentKey = 'guitar';
   const liveBandSession = isBandView && !!user;
 
+  const resolvedSongId = searchParams.get('songId') ?? (isDemo ? DEMO_SONG.id : readActiveSongId());
+  const S = song ?? DEMO_SONG;
+  const bpm = S.bpm || 84;
+  const total = score.totalBeats;
+
   const bandRoom = useBandRoom({
     enabled: liveBandSession,
     userId: user?.id ?? null,
     instrument: instrument,
-    songId: SONG.id,
+    songId: resolvedSongId,
     roomId: bandRoomQueryId,
     roomCode: bandRoomQueryCode,
   });
@@ -342,6 +351,47 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       setAffCollapsed(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (isDemo) {
+      setSong(DEMO_SONG);
+      setScore({ notes: SCORE.notes, totalBeats: SCORE.totalBeats });
+      setSongLoading(false);
+      return;
+    }
+
+    if (!resolvedSongId) {
+      setSongLoading(false);
+      router.replace('/dashboard');
+      return;
+    }
+
+    let cancelled = false;
+    setSongLoading(true);
+
+    void (async () => {
+      const fetched = await fetchSongById(resolvedSongId);
+      if (cancelled) return;
+      if (!fetched) {
+        router.replace('/dashboard');
+        return;
+      }
+      setSong(fetched);
+      saveActiveSongId(fetched.id);
+      const inst = readInstrument();
+      const fetchedScore = await fetchSongScore(fetched.id, inst);
+      if (cancelled) return;
+      setScore(fetchedScore);
+      setSongLoading(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [isDemo, resolvedSongId, router]);
+
+  useEffect(() => {
+    if (isDemo || !resolvedSongId || songLoading) return;
+    void fetchSongScore(resolvedSongId, instrument).then(setScore);
+  }, [instrument, isDemo, resolvedSongId, songLoading]);
 
   useEffect(() => {
     if (!canTogglePlayerMode({ isDemo, plan })) {
@@ -380,9 +430,10 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   useEffect(() => { beatRef.current = curBeat; }, [curBeat]);
 
   useEffect(() => {
-    const id = setTimeout(() => setLoading(false), 1500);
+    if (songLoading) return;
+    const id = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(id);
-  }, []);
+  }, [songLoading]);
 
   useEffect(() => {
     if (!playing || (isBandView && !useLocalBandClock)) return;
@@ -604,11 +655,23 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     setTimeout(() => setToast(`${t('player.dlReady')} Cordeband — ${S.title} (–${instName}).mp3`), 1700);
   };
 
+  const instrumentHref = resolvedSongId
+    ? `/instrument?songId=${encodeURIComponent(resolvedSongId)}`
+    : '/instrument';
+
+  if (songLoading || (!isDemo && !song)) {
+    return (
+      <div className="loader-center" style={{ minHeight: '60vh' }}>
+        <ClassicLoader />
+      </div>
+    );
+  }
+
   return (
     <main className="wrap app-main page">
       <div className="player-top">
         <div className="player-top-row">
-          <Link href="/instrument" className="btn btn-ghost btn-sm">
+          <Link href={instrumentHref} className="btn btn-ghost btn-sm">
             <IconArrowL size={15} /> {t('player.changeInst')}
           </Link>
 
@@ -709,6 +772,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 loading={loading}
                 waiting={isWaiting && !loading && effectivePlaying}
                 waitLabel={t('player.waitOverlay')}
+                notes={score.notes}
+                totalBeats={score.totalBeats}
               />
 
               <div className="card transport">
@@ -798,6 +863,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               loading={loading}
               waiting={isWaiting && !loading && playing}
               waitLabel={t('player.waitOverlay')}
+              notes={score.notes}
+              totalBeats={score.totalBeats}
             />
 
             <div className="card transport">

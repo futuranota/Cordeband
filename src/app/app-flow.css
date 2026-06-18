@@ -16,8 +16,16 @@
 
 /* Song grid */
 .song-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
-.song-card{ overflow:hidden; cursor:pointer; transition:transform .18s ease, background .18s ease; display:flex; flex-direction:column; }
+.song-card{ overflow:hidden; cursor:pointer; transition:transform .18s ease, background .18s ease; display:flex; flex-direction:column; position:relative; }
 .song-card:hover{ transform:translateY(-4px); background:var(--elev-2); }
+.song-card-delete{
+  position:absolute; top:10px; right:10px; z-index:3;
+  opacity:0; transition:opacity .15s ease;
+  background:rgba(10,10,10,.78); border-color:var(--line);
+}
+.song-card:hover .song-card-delete,
+.song-card:focus-within .song-card-delete{ opacity:1; }
+.song-card-delete:disabled{ opacity:.5; cursor:wait; }
 .song-cover{
   aspect-ratio:16/10; position:relative; overflow:hidden;
   background:linear-gradient(140deg, #1b3a4d, #122033);

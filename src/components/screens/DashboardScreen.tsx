@@ -16,7 +16,7 @@ import { ADMIN_EFFECTIVE_PLAN, getEffectivePlan, hasUnlimitedSongQuota } from '@
 import { normalizePlan } from '@/lib/supabase/profile';
 import {
   IconPlus, IconCrown, IconBand, IconUpload, IconCheck,
-  IconClock, IconNote, IconSpark, IconPlay,
+  IconClock, IconNote, IconSpark, IconPlay, IconTrash,
 } from '@/components/ui/icons';
 
 function useStemsTick() {
@@ -55,13 +55,36 @@ function StemsStatus({ song, compact }: { song: Song; compact?: boolean }) {
   );
 }
 
-function SongCard({ song, onOpen }: { song: Song; onOpen: (song: Song) => void }) {
+function SongCard({
+  song,
+  onOpen,
+  onDelete,
+  deleting,
+}: {
+  song: Song;
+  onOpen: (song: Song) => void;
+  onDelete: (song: Song) => void;
+  deleting: boolean;
+}) {
   const { t } = useT();
   useStemsTick();
   const expired = stemsExpired(song);
 
   return (
     <div className={`card song-card${expired ? ' expired' : ''}`} onClick={() => onOpen(song)}>
+      <button
+        type="button"
+        className="iconbtn song-card-delete"
+        aria-label={t('dash.deleteSong')}
+        title={t('dash.deleteSong')}
+        disabled={deleting}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(song);
+        }}
+      >
+        <IconTrash size={15} />
+      </button>
       <div className="song-cover">
         <span className="cover-glyph">{song.glyph}</span>
         {expired ? (
@@ -257,6 +280,7 @@ export function DashboardScreen() {
   const [library, setLibrary] = useState<Song[]>([]);
   const [featured, setFeatured] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const plan = isAdmin
     ? ADMIN_EFFECTIVE_PLAN
     : getEffectivePlan(user?.id, normalizePlan(profile?.plan));
@@ -288,6 +312,27 @@ export function DashboardScreen() {
       return;
     }
     router.push('/instrument');
+  }
+
+  async function deleteSong(song: Song) {
+    if (!window.confirm(t('dash.deleteConfirm').replace('{title}', song.title))) return;
+
+    setDeletingId(song.id);
+    try {
+      const res = await fetch(`/api/songs/${song.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? t('dash.deleteError'));
+      }
+      setLibrary((prev) => prev.filter((s) => s.id !== song.id));
+      if (typeof window !== 'undefined' && localStorage.getItem('cordeband_song_id') === song.id) {
+        localStorage.removeItem('cordeband_song_id');
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : t('dash.deleteError'));
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   if (!loading && library.length === 0 && featured.length === 0) {
@@ -331,7 +376,13 @@ export function DashboardScreen() {
       {library.length > 0 ? (
         <div className="song-grid">
           {library.map((s) => (
-            <SongCard key={s.id} song={s} onOpen={openSong} />
+            <SongCard
+              key={s.id}
+              song={s}
+              onOpen={openSong}
+              onDelete={deleteSong}
+              deleting={deletingId === s.id}
+            />
           ))}
           <Link href="/upload" className="card add-card song-card">
             <div className="plus"><IconPlus size={22} /></div>

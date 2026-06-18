@@ -1,27 +1,96 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { INST_ORDER, INSTRUMENTS, LIBRARY, type InstrumentKey } from '@/lib/data';
+import { fetchSongById, saveActiveSongId } from '@/lib/supabase/fetch-song';
+import type { Song } from '@/lib/data';
 import { StagePanel } from '@/components/player/StagePanel';
+import { ClassicLoader } from '@/components/ui/ClassicLoader';
 import { IconArrow, IconArrowL, IconCheck } from '@/components/ui/icons';
 
-const SONG = LIBRARY[0];
+const DEMO_SONG = LIBRARY[0];
 
-export function InstrumentScreen() {
+function InstrumentScreenInner() {
   const { t } = useT();
   const router = useRouter();
-  const available = new Set(SONG?.instruments ?? []);
-  const [sel, setSel] = useState<InstrumentKey | null>(
-    available.has('guitar') ? 'guitar' : null,
-  );
+  const searchParams = useSearchParams();
+  const songId = searchParams.get('songId');
+
+  const [song, setSong] = useState<Song | null>(null);
+  const [loading, setLoading] = useState(!!songId);
+  const [error, setError] = useState<string | null>(null);
+
+  const activeSong = song ?? (songId ? null : DEMO_SONG);
+  const available = new Set(activeSong?.instruments ?? []);
+  const [sel, setSel] = useState<InstrumentKey | null>(null);
+
+  useEffect(() => {
+    if (!songId) {
+      setSong(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    void fetchSongById(songId).then((fetched) => {
+      if (cancelled) return;
+      if (!fetched) {
+        setError(t('sel.songNotFound'));
+        setSong(null);
+      } else if (fetched.status && fetched.status !== 'ready') {
+        setError(t('sel.songProcessing'));
+        setSong(fetched);
+      } else {
+        setSong(fetched);
+        saveActiveSongId(fetched.id);
+      }
+      setLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [songId, t]);
+
+  useEffect(() => {
+    if (!activeSong) return;
+    const insts = new Set(activeSong.instruments);
+    setSel(insts.has('guitar') ? 'guitar' : activeSong.instruments[0] ?? null);
+  }, [activeSong?.id, activeSong?.instruments.join(',')]);
 
   function chooseInstrument(key: InstrumentKey) {
     localStorage.setItem('cordeband_instrument', key);
-    router.push('/player');
+    const id = songId ?? activeSong?.id;
+    if (id) saveActiveSongId(id);
+    const qs = id ? `?songId=${encodeURIComponent(id)}` : '';
+    router.push(`/player${qs}`);
   }
+
+  if (loading) {
+    return (
+      <div className="loader-center" style={{ minHeight: '60vh' }}>
+        <ClassicLoader />
+      </div>
+    );
+  }
+
+  if (error && !activeSong?.instruments.length) {
+    return (
+      <main className="wrap app-main page" style={{ textAlign: 'center', paddingTop: 60 }}>
+        <h2 className="h2">{error}</h2>
+        <Link href="/dashboard" className="btn btn-primary" style={{ marginTop: 24 }}>
+          {t('nav.library')}
+        </Link>
+      </main>
+    );
+  }
+
+  const ready = !song?.status || song.status === 'ready';
 
   return (
     <main className="wrap app-main page" style={{ maxWidth: 900 }}>
@@ -30,14 +99,17 @@ export function InstrumentScreen() {
       </Link>
 
       <div style={{ textAlign: 'center' }}>
-        <span className="eyebrow">{SONG?.title ?? '—'}</span>
+        <span className="eyebrow">{activeSong?.title ?? '—'}</span>
         <h1 className="h1" style={{ fontSize: 'clamp(32px,4vw,46px)', marginTop: 14 }}>{t('sel.whatPlay')}</h1>
         <p className="lead" style={{ margin: '16px auto 0', maxWidth: '44ch' }}>{t('sel.sub')}</p>
+        {error && (
+          <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>{error}</p>
+        )}
       </div>
 
       <div style={{ marginTop: 36 }}>
         <StagePanel
-          instruments={SONG?.instruments ?? []}
+          instruments={activeSong?.instruments ?? []}
           youKey={sel}
           title={t('sel.stageTitle')}
           sub={t('sel.stageSub')}
@@ -74,12 +146,20 @@ export function InstrumentScreen() {
         <button
           type="button"
           className="btn btn-primary btn-lg"
-          disabled={!sel}
+          disabled={!sel || !ready}
           onClick={() => sel && chooseInstrument(sel)}
         >
           {t('sel.enter')} <IconArrow size={17} />
         </button>
       </div>
     </main>
+  );
+}
+
+export function InstrumentScreen() {
+  return (
+    <Suspense fallback={<div className="loader-center" style={{ minHeight: '60vh' }}><ClassicLoader /></div>}>
+      <InstrumentScreenInner />
+    </Suspense>
   );
 }

@@ -180,9 +180,11 @@ type SheetViewerProps = {
   loading?: boolean;
   waiting?: boolean;
   waitLabel?: string;
+  notes?: ScoreNote[];
+  totalBeats?: number;
 };
 
-export function SheetViewer({ view, curBeat, loop, loading, waiting, waitLabel }: SheetViewerProps) {
+export function SheetViewer({ view, curBeat, loop, loading, waiting, waitLabel, notes, totalBeats }: SheetViewerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [vw, setVw] = useState(720);
 
@@ -195,8 +197,9 @@ export function SheetViewer({ view, curBeat, loop, loading, waiting, waitLabel }
     return () => ro.disconnect();
   }, []);
 
-  const notes = SCORE.notes;
-  const totalWidth = xAt(SCORE.totalBeats) + RIGHT;
+  const scoreNotes = notes ?? SCORE.notes;
+  const scoreTotal = totalBeats ?? SCORE.totalBeats;
+  const totalWidth = xAt(scoreTotal) + RIGHT;
   const cursorX = Math.max(150, Math.min(340, vw * 0.30));
   const translate = cursorX - xAt(curBeat);
 
@@ -216,7 +219,7 @@ export function SheetViewer({ view, curBeat, loop, loading, waiting, waitLabel }
           {loop && (
             <div className="loop-band" style={{ left: xAt(loop.a), width: (loop.b - loop.a) * PPB }} />
           )}
-          <View notes={notes} totalWidth={totalWidth} curBeat={curBeat} />
+          <View notes={scoreNotes} totalWidth={totalWidth} curBeat={curBeat} />
         </div>
         <LeftPanel view={view} />
         <div className="sheet-fade-r" />
