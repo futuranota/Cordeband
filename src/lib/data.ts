@@ -37,6 +37,10 @@ export type Song = {
   featured?: boolean;
   published?: boolean;
   isFeatured?: boolean;
+  coverUrl?: string;
+  isAiGenerated?: boolean;
+  description?: string;
+  status?: string;
 };
 
 const NOW = Date.now();

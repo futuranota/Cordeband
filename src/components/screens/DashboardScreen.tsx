@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { useSession } from '@/contexts/SessionContext';
 import {
-  LIBRARY, publishedFeatured, stemsExpired, stemsMsLeft,
+  LIBRARY, stemsExpired, stemsMsLeft,
   INSTRUMENTS, type Song, type InstrumentKey,
 } from '@/lib/data';
+import { fetchPublishedCatalogSongs } from '@/lib/supabase/fetch-published-catalog';
 import { includedSongQuota } from '@/lib/plans';
 import { normalizePlan } from '@/lib/supabase/profile';
 import { UpgradeBanner } from '@/components/billing/UpgradeBanner';
@@ -128,7 +129,15 @@ function FeaturedSongCard({ song, onOpen }: { song: Song; onOpen: () => void }) 
     <div className="card feat-card" onClick={onOpen}>
       <div className="feat-cover">
         <span className="feat-badge"><IconSpark size={11} /> {t('dash.featBadge')}</span>
-        <span className="feat-glyph">{song.glyph}</span>
+        {song.coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={song.coverUrl} alt="" className="feat-cover-img" />
+        ) : (
+          <span className="feat-glyph">{song.glyph}</span>
+        )}
+        {song.isAiGenerated && (
+          <span className="feat-ai-badge">{t('dash.aiGenerated')}</span>
+        )}
         <span className="feat-play"><IconPlay size={16} /></span>
       </div>
       <div className="feat-body">
@@ -254,10 +263,14 @@ export function DashboardScreen() {
   const isBanda = plan === 'banda';
 
   useEffect(() => {
-    setFeatured(publishedFeatured());
+    void fetchPublishedCatalogSongs().then(setFeatured);
   }, []);
 
-  function openSong(_song?: Song) {
+  function openSong(song?: Song) {
+    if (song?.id) {
+      router.push(`/instrument?songId=${encodeURIComponent(song.id)}`);
+      return;
+    }
     router.push('/instrument');
   }
 

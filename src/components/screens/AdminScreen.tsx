@@ -1,55 +1,107 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/i18n/context';
 import { Logo } from '@/components/layout/Logo';
+import { FeaturedSongForm } from '@/components/admin/FeaturedSongForm';
+import { createClient } from '@/lib/supabase/client';
 import {
-  loadAdminAffiliates, saveAdminAffiliates, loadFeatured, saveFeatured,
+  loadAdminAffiliates, saveAdminAffiliates,
   type AffiliateProduct, type Song,
 } from '@/lib/data';
-import { IconEdit, IconTrash, IconPlus } from '@/components/ui/icons';
-
-const ADMIN_EMAIL = 'xapplex65@gmail.com';
-const ADMIN_LS = 'cordeband_admin_v1';
+import { IconEdit, IconTrash, IconPlus, IconVolume, IconMute } from '@/components/ui/icons';
 
 type Tab = 'aff' | 'feat';
 
+function statusLabel(status: string | undefined, t: (k: string) => string): string {
+  switch (status) {
+    case 'ready': return t('admin.statusReady');
+    case 'processing': return t('admin.statusProcessing');
+    case 'failed': return t('admin.statusFailed');
+    default: return t('admin.statusPending');
+  }
+}
+
 export function AdminScreen() {
   const { t } = useT();
-  const [authed, setAuthed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(ADMIN_LS) === '1';
-  });
+  const supabase = createClient();
+
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authed, setAuthed] = useState(false);
   const [email, setEmail] = useState('');
-  const [pass, setPass]   = useState('');
-  const [err, setErr]     = useState(false);
-  const [tab, setTab]     = useState<Tab>('aff');
+  const [pass, setPass] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('aff');
 
   /* Affiliates state */
   const [affs, setAffs] = useState<AffiliateProduct[]>(() =>
-    typeof window !== 'undefined' ? loadAdminAffiliates() : []
+    typeof window !== 'undefined' ? loadAdminAffiliates() : [],
   );
   const [showAffForm, setShowAffForm] = useState(false);
   const [editAff, setEditAff] = useState<AffiliateProduct | null>(null);
   const [affForm, setAffForm] = useState({ title: '', price: '', url: '', platform: '', instrument: 'all', image: '' });
 
   /* Featured state */
-  const [feats, setFeats] = useState<Song[]>(() =>
-    typeof window !== 'undefined' ? loadFeatured() : []
-  );
+  const [feats, setFeats] = useState<Song[]>([]);
+  const [featsLoading, setFeatsLoading] = useState(false);
+  const [showFeatForm, setShowFeatForm] = useState(false);
 
-  function login(e: React.FormEvent) {
-    e.preventDefault();
-    if (email.trim().toLowerCase() === ADMIN_EMAIL && pass.length >= 4) {
-      localStorage.setItem(ADMIN_LS, '1');
-      setAuthed(true);
-    } else {
-      setErr(true);
+  const verifyAdminSession = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setAuthed(false);
+      setAuthChecked(true);
+      return;
     }
+    const res = await fetch('/api/admin/featured-songs');
+    setAuthed(res.ok);
+    setAuthChecked(true);
+  }, [supabase.auth]);
+
+  const loadFeaturedSongs = useCallback(async () => {
+    setFeatsLoading(true);
+    try {
+      const res = await fetch('/api/admin/featured-songs');
+      if (!res.ok) return;
+      const data = await res.json();
+      setFeats(data.songs ?? []);
+    } finally {
+      setFeatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void verifyAdminSession();
+  }, [verifyAdminSession]);
+
+  useEffect(() => {
+    if (authed && tab === 'feat') void loadFeaturedSongs();
+  }, [authed, tab, loadFeaturedSongs]);
+
+  async function login(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: pass,
+    });
+    if (error) {
+      setErr(t('admin.wrong'));
+      return;
+    }
+    const res = await fetch('/api/admin/featured-songs');
+    if (!res.ok) {
+      await supabase.auth.signOut();
+      setAuthed(false);
+      setErr(t('admin.notAdmin'));
+      return;
+    }
+    setAuthed(true);
   }
 
-  function logout() {
-    localStorage.removeItem(ADMIN_LS);
+  async function logout() {
+    await supabase.auth.signOut();
     setAuthed(false);
   }
 
@@ -57,7 +109,7 @@ export function AdminScreen() {
     const id = editAff?.id ?? `a${Date.now()}`;
     const item: AffiliateProduct = { ...affForm, id, active: true };
     const next = editAff
-      ? affs.map(a => a.id === editAff.id ? item : a)
+      ? affs.map((a) => (a.id === editAff.id ? item : a))
       : [...affs, item];
     setAffs(next);
     saveAdminAffiliates(next);
@@ -67,18 +119,41 @@ export function AdminScreen() {
   }
 
   function toggleAff(id: string) {
-    const next = affs.map(a => a.id === id ? { ...a, active: !a.active } : a);
-    setAffs(next); saveAdminAffiliates(next);
+    const next = affs.map((a) => (a.id === id ? { ...a, active: !a.active } : a));
+    setAffs(next);
+    saveAdminAffiliates(next);
   }
 
   function deleteAff(id: string) {
-    const next = affs.filter(a => a.id !== id);
-    setAffs(next); saveAdminAffiliates(next);
+    const next = affs.filter((a) => a.id !== id);
+    setAffs(next);
+    saveAdminAffiliates(next);
   }
 
-  function toggleFeat(id: string) {
-    const next = feats.map(f => f.id === id ? { ...f, published: !f.published } : f);
-    setFeats(next); saveFeatured(next);
+  async function toggleFeatPublish(song: Song) {
+    const res = await fetch(`/api/admin/featured-songs/${song.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPublic: !song.published }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setFeats((prev) => prev.map((f) => (f.id === song.id ? data.song : f)));
+  }
+
+  async function deleteFeat(id: string) {
+    if (!window.confirm(t('admin.featDeleteConfirm'))) return;
+    const res = await fetch(`/api/admin/featured-songs/${id}`, { method: 'DELETE' });
+    if (!res.ok) return;
+    setFeats((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  if (!authChecked) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <p className="muted">{t('admin.checking')}</p>
+      </div>
+    );
   }
 
   /* ── Login gate ──────────────────────────────────────────── */
@@ -94,13 +169,30 @@ export function AdminScreen() {
           <form onSubmit={login} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <label className="field-label">{t('admin.email')}</label>
-              <input className="input" type="email" placeholder={t('admin.emailPh')} value={email} onChange={e => { setEmail(e.target.value); setErr(false); }} />
+              <input className="input" type="email" placeholder={t('admin.emailPh')} value={email} onChange={(e) => { setEmail(e.target.value); setErr(null); }} />
             </div>
             <div>
               <label className="field-label">{t('admin.pass')}</label>
-              <input className="input" type="password" placeholder={t('admin.passPh')} value={pass} onChange={e => { setPass(e.target.value); setErr(false); }} />
+              <div className="pwfield">
+                <input
+                  className="input"
+                  type={showPass ? 'text' : 'password'}
+                  placeholder={t('admin.passPh')}
+                  value={pass}
+                  onChange={(e) => { setPass(e.target.value); setErr(null); }}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="pwtoggle"
+                  onClick={() => setShowPass((s) => !s)}
+                  aria-label={showPass ? t('admin.hidePass') : t('admin.showPass')}
+                >
+                  {showPass ? <IconMute size={17} /> : <IconVolume size={17} />}
+                </button>
+              </div>
             </div>
-            {err && <p style={{ color: '#ef4444', fontSize: 13, margin: 0 }}>{t('admin.wrong')}</p>}
+            {err && <p style={{ color: '#ef4444', fontSize: 13, margin: 0 }}>{err}</p>}
             <button className="btn btn-primary btn-block" type="submit">{t('admin.login')}</button>
           </form>
         </div>
@@ -111,7 +203,6 @@ export function AdminScreen() {
   /* ── Admin panel ─────────────────────────────────────────── */
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* Admin nav */}
       <nav className="nav">
         <div className="nav-inner">
           <Logo />
@@ -121,9 +212,8 @@ export function AdminScreen() {
       </nav>
 
       <div className="wrap" style={{ paddingTop: 40, paddingBottom: 80 }}>
-        {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>
-          {(['aff', 'feat'] as Tab[]).map(t2 => (
+          {(['aff', 'feat'] as Tab[]).map((t2) => (
             <button
               key={t2}
               onClick={() => setTab(t2)}
@@ -134,7 +224,6 @@ export function AdminScreen() {
           ))}
         </div>
 
-        {/* ── Affiliates tab ─────────────────────────────────── */}
         {tab === 'aff' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -147,7 +236,6 @@ export function AdminScreen() {
               </button>
             </div>
 
-            {/* Form */}
             {showAffForm && (
               <div className="card" style={{ padding: 24, marginBottom: 24 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -156,14 +244,14 @@ export function AdminScreen() {
                     { key: 'price', label: t('admin.fPrice'), ph: t('admin.fPricePh') },
                     { key: 'url', label: t('admin.fUrl'), ph: t('admin.fUrlPh') },
                     { key: 'platform', label: t('admin.fPlatform'), ph: t('admin.fPlatformPh') },
-                  ].map(f => (
+                  ].map((f) => (
                     <div key={f.key}>
                       <label className="field-label">{f.label}</label>
                       <input
                         className="input"
                         placeholder={f.ph}
                         value={(affForm as Record<string, string>)[f.key]}
-                        onChange={e => setAffForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                        onChange={(e) => setAffForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
                       />
                     </div>
                   ))}
@@ -172,10 +260,10 @@ export function AdminScreen() {
                     <select
                       className="input"
                       value={affForm.instrument}
-                      onChange={e => setAffForm(prev => ({ ...prev, instrument: e.target.value }))}
+                      onChange={(e) => setAffForm((prev) => ({ ...prev, instrument: e.target.value }))}
                     >
                       <option value="all">{t('admin.all')}</option>
-                      {['guitar', 'piano', 'bass', 'drums', 'vocals', 'other'].map(k => (
+                      {['guitar', 'piano', 'bass', 'drums', 'vocals', 'other'].map((k) => (
                         <option key={k} value={k}>{k}</option>
                       ))}
                     </select>
@@ -192,7 +280,7 @@ export function AdminScreen() {
               <p className="muted">{t('admin.empty')}</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {affs.map(a => (
+                {affs.map((a) => (
                   <div key={a.id} className="card" style={{ padding: 16, display: 'flex', gap: 14, alignItems: 'center' }}>
                     <div style={{ flex: 1 }}>
                       <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{a.title}</p>
@@ -217,29 +305,66 @@ export function AdminScreen() {
           </div>
         )}
 
-        {/* ── Featured tab ───────────────────────────────────── */}
         {tab === 'feat' && (
           <div>
-            <div style={{ marginBottom: 20 }}>
-              <h2 className="h3">{t('admin.featTitle')}</h2>
-              <p className="muted" style={{ fontSize: 14, marginTop: 4 }}>{t('admin.featSub')}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h2 className="h3">{t('admin.featTitle')}</h2>
+                <p className="muted" style={{ fontSize: 14, marginTop: 4 }}>{t('admin.featSub')}</p>
+              </div>
+              <button className="btn btn-primary btn-sm" style={{ gap: 6 }} onClick={() => setShowFeatForm(true)}>
+                <IconPlus size={14} />{t('admin.featAdd')}
+              </button>
             </div>
-            {feats.length === 0 ? (
+
+            {showFeatForm && (
+              <FeaturedSongForm
+                onSaved={(song) => {
+                  setShowFeatForm(false);
+                  setFeats((prev) => [song, ...prev.filter((f) => f.id !== song.id)]);
+                }}
+                onCancel={() => setShowFeatForm(false)}
+              />
+            )}
+
+            {featsLoading ? (
+              <p className="muted">{t('admin.uploadingFeat')}</p>
+            ) : feats.length === 0 ? (
               <p className="muted">{t('admin.featEmpty')}</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {feats.map(f => (
+                {feats.map((f) => (
                   <div key={f.id} className="card" style={{ padding: 16, display: 'flex', gap: 14, alignItems: 'center' }}>
-                    <span style={{ fontSize: 22 }}>{f.glyph}</span>
+                    {f.coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={f.coverUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }} />
+                    ) : (
+                      <span style={{ fontSize: 22, width: 48, textAlign: 'center' }}>{f.glyph}</span>
+                    )}
                     <div style={{ flex: 1 }}>
-                      <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{f.title}</p>
-                      <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>{f.artist} · {f.bpm} BPM · {f.keySig}</p>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>
+                        {f.title}
+                        {f.isAiGenerated && (
+                          <span className="pill" style={{ marginLeft: 8, fontSize: 10 }}>{t('admin.aiGenerated')}</span>
+                        )}
+                      </p>
+                      <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>
+                        {f.artist || '—'} · {statusLabel(f.status, t)}
+                        {f.status === 'ready' && f.bpm ? ` · ${f.bpm} BPM` : ''}
+                      </p>
                     </div>
                     <span className={`pill ${f.published ? 'pill-ink' : ''}`} style={{ fontSize: 11 }}>
                       {f.published ? t('admin.published') : t('admin.hidden')}
                     </span>
-                    <button className="btn btn-ghost btn-sm" onClick={() => toggleFeat(f.id)}>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      disabled={f.status !== 'ready'}
+                      onClick={() => void toggleFeatPublish(f)}
+                    >
                       {f.published ? t('admin.hide') : t('admin.publish')}
+                    </button>
+                    <button className="iconbtn" onClick={() => void deleteFeat(f.id)}>
+                      <IconTrash size={15} />
                     </button>
                   </div>
                 ))}

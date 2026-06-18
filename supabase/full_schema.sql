@@ -79,12 +79,15 @@ create table if not exists public.songs (
   title text not null,
   artist text not null default '',
   glyph text not null default '♪',
+  description text,
+  cover_url text,
+  is_ai_generated boolean not null default false,
   duration_seconds integer not null default 0,
   bpm integer,
   key_signature text,
   instruments text[] not null default '{}',
   source_type text not null default 'upload'
-    check (source_type in ('upload')),
+    check (source_type in ('upload', 'catalog')),
   status text not null default 'pending'
     check (status in ('pending', 'processing', 'ready', 'failed')),
   storage_path text,

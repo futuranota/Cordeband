@@ -1,0 +1,24 @@
+---
+description: Backlog — transcodificar audio del catálogo destacado a AAC/Opus antes de subir a Storage
+globs: src/app/api/admin/featured-songs/**,src/lib/supabase/featured-storage.ts,src/lib/mock-audio-processor.ts,scripts/setup-featured-bucket.mjs
+alwaysApply: false
+---
+
+# Transcodificación audio — catálogo destacado (PENDIENTE)
+
+No implementado aún. Ver spec completa: `docs/backlog/audio-transcoding-featured-catalog.md`
+
+## Resumen
+
+Al subir en admin (featured songs), convertir MP3/WAV/FLAC → **AAC `.m4a` 128k** (default) u Opus antes de guardar en bucket `featured`.
+
+## Integración
+
+- Hook en `POST /api/admin/featured-songs` antes de `uploadFeaturedFile()`.
+- Preferir worker Railway (`AUDIO_PROCESSOR_URL`) sobre FFmpeg en Vercel serverless.
+- Guardar siempre como `audio/{songId}.m4a`; `Content-Type: audio/mp4`.
+- Actualizar MIME types del bucket al implementar.
+
+## Default recomendado
+
+AAC en M4A — mejor compatibilidad Safari/iOS que Opus.
