@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { useSession } from '@/contexts/SessionContext';
 import {
-  LIBRARY, stemsExpired, stemsMsLeft,
+  stemsExpired, stemsMsLeft,
   INSTRUMENTS, type Song, type InstrumentKey,
 } from '@/lib/data';
 import { fetchPublishedCatalogSongs } from '@/lib/supabase/fetch-published-catalog';
+import { fetchUserLibrarySongs } from '@/lib/supabase/fetch-user-library';
 import { includedSongQuota } from '@/lib/plans';
 import { normalizePlan } from '@/lib/supabase/profile';
 import {
@@ -252,16 +253,29 @@ export function DashboardScreen() {
   const { t } = useT();
   const router = useRouter();
   const { profile } = useSession();
+  const [library, setLibrary] = useState<Song[]>([]);
   const [featured, setFeatured] = useState<Song[]>([]);
+  const [loading, setLoading] = useState(true);
   const plan = normalizePlan(profile?.plan);
   const planLimit = includedSongQuota(plan);
-  const used = LIBRARY.filter((s) => s.addedThisMonth).length;
+  const used = library.length;
   const left = Math.max(0, planLimit - used);
   const pct = planLimit > 0 ? Math.min(100, (used / planLimit) * 100) : 0;
   const isBanda = plan === 'banda';
 
   useEffect(() => {
-    void fetchPublishedCatalogSongs().then(setFeatured);
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([fetchUserLibrarySongs(), fetchPublishedCatalogSongs()])
+      .then(([userSongs, catalogSongs]) => {
+        if (cancelled) return;
+        setLibrary(userSongs);
+        setFeatured(catalogSongs);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, []);
 
   function openSong(song?: Song) {
@@ -272,7 +286,7 @@ export function DashboardScreen() {
     router.push('/instrument');
   }
 
-  if (LIBRARY.length === 0 && featured.length === 0) {
+  if (!loading && library.length === 0 && featured.length === 0) {
     return <EmptyLibrary />;
   }
 
@@ -304,9 +318,9 @@ export function DashboardScreen() {
         </div>
       </div>
 
-      {LIBRARY.length > 0 ? (
+      {library.length > 0 ? (
         <div className="song-grid">
-          {LIBRARY.map((s) => (
+          {library.map((s) => (
             <SongCard key={s.id} song={s} onOpen={openSong} />
           ))}
           <Link href="/upload" className="card add-card song-card">

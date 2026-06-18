@@ -1,6 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { CATALOG_INSTRUMENTS } from '@/types/catalog';
 import { SCORE } from '@/lib/data';
+import { userStemPath } from '@/lib/supabase/user-song-storage';
+
+const STEMS_TTL_MS = 48 * 60 * 60 * 1000;
 
 function buildNotesForInstrument(instrument: string) {
   const notes = SCORE.notes.slice(0, 32).map((n) => ({
@@ -20,7 +23,16 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function runMockFeaturedProcessor(songId: string, jobId: string) {
+type MockProcessorOptions = {
+  stemPath: (songId: string, instrument: string) => string;
+  stemsExpiresAt: string | null;
+};
+
+async function runMockProcessor(
+  songId: string,
+  jobId: string,
+  options: MockProcessorOptions,
+) {
   const admin = createAdminClient();
 
   const markFailed = async (message: string) => {
@@ -53,13 +65,14 @@ export async function runMockFeaturedProcessor(songId: string, jobId: string) {
     const keySig = mockKeys[Math.floor(Math.random() * mockKeys.length)];
 
     for (const instrument of CATALOG_INSTRUMENTS) {
+      const storagePath = options.stemPath(songId, instrument);
       const { data: stem, error: stemErr } = await admin
         .from('stems')
         .insert({
           song_id: songId,
           instrument_type: instrument,
           storage_url: `mock://${songId}/${instrument}.wav`,
-          storage_path: `featured/stems/${songId}/${instrument}.wav`,
+          storage_path: storagePath,
         })
         .select('id')
         .single();
@@ -87,6 +100,7 @@ export async function runMockFeaturedProcessor(songId: string, jobId: string) {
       key_signature: keySig,
       instruments: CATALOG_INSTRUMENTS,
       duration_seconds: 210,
+      stems_expires_at: options.stemsExpiresAt,
     }).eq('id', songId);
 
     await admin.from('processing_jobs').update({
@@ -99,4 +113,19 @@ export async function runMockFeaturedProcessor(songId: string, jobId: string) {
     await markFailed(message);
     throw err;
   }
+}
+
+export async function runMockFeaturedProcessor(songId: string, jobId: string) {
+  return runMockProcessor(songId, jobId, {
+    stemPath: (id, instrument) => `featured/stems/${id}/${instrument}.wav`,
+    stemsExpiresAt: null,
+  });
+}
+
+export async function runMockUserProcessor(songId: string, jobId: string) {
+  const expiresAt = new Date(Date.now() + STEMS_TTL_MS).toISOString();
+  return runMockProcessor(songId, jobId, {
+    stemPath: userStemPath,
+    stemsExpiresAt: expiresAt,
+  });
 }
