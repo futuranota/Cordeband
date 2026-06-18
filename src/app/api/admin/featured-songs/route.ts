@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/admin-auth';
+import { requireAdmin } from '@/lib/admin-auth-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ADMIN_CATALOG_SELECT, mapCatalogRowToSong } from '@/lib/supabase/catalog-songs';
 import { extFromName, uploadFeaturedFile } from '@/lib/supabase/featured-storage';

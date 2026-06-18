@@ -17,29 +17,32 @@ import {
   type PlanId,
 } from '@/lib/plans';
 import { normalizePlan } from '@/lib/supabase/profile';
+import { ADMIN_EFFECTIVE_PLAN, hasUnlimitedSongQuota } from '@/lib/admin-privileges';
 import { LIBRARY } from '@/lib/data';
 
 export function ProfileScreen() {
   const { t, tList } = useT();
   const router = useRouter();
-  const { user, profile } = useSession();
+  const { user, profile, isAdmin } = useSession();
   const actualPlan = normalizePlan(profile?.plan);
   const intendedPlan = profile?.intended_plan ?? null;
 
-  const previewPlan: PlanId =
-    actualPlan !== 'free'
+  const previewPlan: PlanId = isAdmin
+    ? ADMIN_EFFECTIVE_PLAN
+    : actualPlan !== 'free'
       ? actualPlan
       : intendedPlan === 'pro' || intendedPlan === 'banda'
         ? intendedPlan
         : 'free';
 
-  const limit = includedSongQuota(previewPlan);
+  const unlimited = hasUnlimitedSongQuota(user?.id) || isAdmin;
+  const limit = unlimited ? null : includedSongQuota(previewPlan);
   const used = profile?.songs_used_this_month ?? LIBRARY.filter((s) => s.addedThisMonth).length;
-  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
-  const showPending =
+  const pct = unlimited || !limit ? 0 : Math.min(100, (used / limit) * 100);
+  const showPending = !isAdmin &&
     actualPlan === 'free' && (intendedPlan === 'pro' || intendedPlan === 'banda');
-  const isPaid = isPaidPlan(actualPlan);
-  const showPlanPicker = actualPlan === 'free' && !!user;
+  const isPaid = isAdmin || isPaidPlan(actualPlan);
+  const showPlanPicker = !isAdmin && actualPlan === 'free' && !!user;
 
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
@@ -92,7 +95,9 @@ export function ProfileScreen() {
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{t('profile.songsIncluded')}</span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{used} / {limit}</span>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>
+                  {unlimited ? `${used} · ${t('common.unlimited')}` : `${used} / ${limit}`}
+                </span>
               </div>
               <div style={{ height: 6, background: 'var(--elev-3)', borderRadius: 3 }}>
                 <div style={{ width: `${pct}%`, height: '100%', background: 'var(--acc)', borderRadius: 3 }} />
@@ -107,11 +112,13 @@ export function ProfileScreen() {
             </ul>
           </div>
 
-          <section id="addons" className="profile-section profile-addon-section">
-            <AddonSongCard used={used} total={limit} />
-          </section>
+          {!unlimited && (
+            <section id="addons" className="profile-section profile-addon-section">
+              <AddonSongCard used={used} total={limit!} />
+            </section>
+          )}
 
-          {user && (
+          {user && !isAdmin && isPaidPlan(actualPlan) && (
             <CancelMembershipPanel userId={user.id} plan={actualPlan} />
           )}
         </>

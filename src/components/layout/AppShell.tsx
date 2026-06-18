@@ -1,6 +1,7 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { AppNav } from '@/components/layout/AppNav';
 import { LandingNav } from '@/components/layout/LandingNav';
@@ -8,16 +9,25 @@ import { UpgradeBanner } from '@/components/billing/UpgradeBanner';
 import { SessionProvider } from '@/contexts/SessionContext';
 import type { Profile } from '@/types/database';
 import { normalizePlan } from '@/lib/supabase/profile';
+import { ADMIN_EFFECTIVE_PLAN } from '@/lib/admin-privileges';
 
 type AppShellProps = {
   user: User | null;
   profile: Profile | null;
+  isAdmin?: boolean;
   children: React.ReactNode;
 };
 
-export function AppShell({ user, profile, children }: AppShellProps) {
+export function AppShell({ user, profile, isAdmin = false, children }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const isDemoPlayer = pathname === '/player';
+
+  useEffect(() => {
+    if (!user && !isDemoPlayer) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    }
+  }, [user, isDemoPlayer, pathname, router]);
 
   if (isDemoPlayer && !user) {
     return (
@@ -31,7 +41,9 @@ export function AppShell({ user, profile, children }: AppShellProps) {
   }
 
   if (!user) {
-    return null;
+    return (
+      <main style={{ minHeight: '100vh', background: 'var(--bg)' }} aria-busy="true" />
+    );
   }
 
   const displayName =
@@ -45,12 +57,12 @@ export function AppShell({ user, profile, children }: AppShellProps) {
     email: user.email ?? '',
   };
 
-  const plan = normalizePlan(profile?.plan);
+  const plan = isAdmin ? ADMIN_EFFECTIVE_PLAN : normalizePlan(profile?.plan);
 
   return (
-    <SessionProvider user={user} profile={profile}>
-      <AppNav user={navUser} plan={plan} />
-      {plan === 'free' && pathname !== '/profile' && <UpgradeBanner />}
+    <SessionProvider user={user} profile={profile} isAdmin={isAdmin}>
+      <AppNav user={navUser} plan={plan} isAdmin={isAdmin} />
+      {!isAdmin && plan === 'free' && pathname !== '/profile' && <UpgradeBanner />}
       <main style={{ minHeight: 'calc(100vh - 68px)', background: 'var(--surface)' }}>
         {children}
       </main>

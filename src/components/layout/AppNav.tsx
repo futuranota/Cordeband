@@ -14,7 +14,7 @@ import { getPlanLabel, type PlanId } from '@/lib/plans';
 
 type User = { name: string; email: string };
 
-export function AppNav({ user, plan }: { user: User; plan: PlanId }) {
+export function AppNav({ user, plan, isAdmin = false }: { user: User; plan: PlanId; isAdmin?: boolean }) {
   const { t } = useT();
   const pathname = usePathname();
   const router = useRouter();
@@ -58,6 +58,8 @@ export function AppNav({ user, plan }: { user: User; plan: PlanId }) {
     banda: getPlanLabel('banda', t),
   };
 
+  const badgeLabel = isAdmin ? t('nav.adminBadge') : getPlanLabel(plan, t);
+
   return (
     <nav className="nav">
       <div className="nav-inner">
@@ -83,10 +85,10 @@ export function AppNav({ user, plan }: { user: User; plan: PlanId }) {
             <IconPlus size={15} />
             <span className="nav-add-label">{t('nav.add')}</span>
           </Link>
-          {plan !== 'free' && (
+          {(isAdmin || plan !== 'free') && (
             <span className="badge-pro">
               <IconCrown size={12} />
-              {getPlanLabel(plan, t)}
+              {badgeLabel}
             </span>
           )}
 
@@ -98,9 +100,14 @@ export function AppNav({ user, plan }: { user: User; plan: PlanId }) {
                   <div className="avatar" style={{ cursor: 'default' }}>{ini}</div>
                   <div>
                     <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{user.name}</p>
-                    <p className="muted" style={{ margin: 0, fontSize: 12 }}>{planLabel[plan]}</p>
+                    <p className="muted" style={{ margin: 0, fontSize: 12 }}>{isAdmin ? t('nav.adminBadge') : planLabel[plan]}</p>
                   </div>
                 </div>
+                {isAdmin && (
+                  <Link href="/admin" className="acct-item" onClick={() => setAcctOpen(false)}>
+                    {t('nav.adminPanel')}
+                  </Link>
+                )}
                 <button type="button" className="acct-item" onClick={logout}>
                   <IconLogout size={16} />
                   {t('acct.logout')}

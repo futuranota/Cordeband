@@ -47,13 +47,8 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (path === '/admin' || path.startsWith('/admin/')) {
-    if (user && !isAdminUser(user.id)) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/';
-      return NextResponse.redirect(url);
-    }
-  }
+  // /admin page handles its own login gate in AdminScreen.
+  // Only API routes are blocked here (see /api/admin above).
 
   return supabaseResponse;
 }

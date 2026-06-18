@@ -12,6 +12,7 @@ import {
 import { fetchPublishedCatalogSongs } from '@/lib/supabase/fetch-published-catalog';
 import { fetchUserLibrarySongs } from '@/lib/supabase/fetch-user-library';
 import { includedSongQuota } from '@/lib/plans';
+import { ADMIN_EFFECTIVE_PLAN, getEffectivePlan, hasUnlimitedSongQuota } from '@/lib/admin-privileges';
 import { normalizePlan } from '@/lib/supabase/profile';
 import {
   IconPlus, IconCrown, IconBand, IconUpload, IconCheck,
@@ -252,15 +253,18 @@ function BandsSection({ isBanda }: { isBanda: boolean }) {
 export function DashboardScreen() {
   const { t } = useT();
   const router = useRouter();
-  const { profile } = useSession();
+  const { profile, user, isAdmin } = useSession();
   const [library, setLibrary] = useState<Song[]>([]);
   const [featured, setFeatured] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
-  const plan = normalizePlan(profile?.plan);
-  const planLimit = includedSongQuota(plan);
+  const plan = isAdmin
+    ? ADMIN_EFFECTIVE_PLAN
+    : getEffectivePlan(user?.id, normalizePlan(profile?.plan));
+  const unlimited = hasUnlimitedSongQuota(user?.id) || isAdmin;
+  const planLimit = unlimited ? null : includedSongQuota(plan);
   const used = library.length;
-  const left = Math.max(0, planLimit - used);
-  const pct = planLimit > 0 ? Math.min(100, (used / planLimit) * 100) : 0;
+  const left = unlimited ? null : Math.max(0, (planLimit ?? 0) - used);
+  const pct = unlimited || !planLimit ? 0 : Math.min(100, (used / planLimit) * 100);
   const isBanda = plan === 'banda';
 
   useEffect(() => {
@@ -299,18 +303,24 @@ export function DashboardScreen() {
         </div>
         <div className="col gap-12" style={{ alignItems: 'flex-end' }}>
           <div className="plan-meter">
-            {plan !== 'free' && (
+            {(unlimited || plan !== 'free') && (
               <span className="pill" style={{ marginBottom: 8, alignSelf: 'flex-end' }}>
                 <IconCrown size={13} />
-                {plan === 'banda' ? t('dash.poolBanda') : t('dash.unlimited')}
+                {unlimited
+                  ? t('nav.adminBadge')
+                  : plan === 'banda'
+                    ? t('dash.poolBanda')
+                    : t('dash.unlimited')}
               </span>
             )}
             <span className="muted tnum" style={{ fontSize: 13 }}>
-              {used} {t('dash.of')} {planLimit} {t('dash.included')}
+              {unlimited
+                ? `${used} ${t('dash.songsUnlimited')}`
+                : `${used} ${t('dash.of')} ${planLimit} ${t('dash.included')}`}
             </span>
             <div className="meter"><i style={{ width: `${pct}%` }} /></div>
           </div>
-          {plan !== 'free' && (
+          {(unlimited || plan !== 'free') && (
             <Link href="/upload" className="btn btn-primary btn-sm">
               <IconPlus size={15} /> {t('dash.add')}
             </Link>
@@ -327,7 +337,9 @@ export function DashboardScreen() {
             <div className="plus"><IconPlus size={22} /></div>
             <div style={{ fontWeight: 600 }}>{t('dash.add')}</div>
             <div className="muted" style={{ fontSize: 12.5 }}>
-              {`${left} ${left === 1 ? t('dash.slotsLeft') : t('dash.slotsLeft2')}`}
+              {unlimited
+                ? t('dash.unlimitedSlots')
+                : `${left} ${left === 1 ? t('dash.slotsLeft') : t('dash.slotsLeft2')}`}
             </div>
           </Link>
         </div>

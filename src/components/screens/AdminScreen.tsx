@@ -9,7 +9,7 @@ import {
   loadAdminAffiliates, saveAdminAffiliates,
   type AffiliateProduct, type Song,
 } from '@/lib/data';
-import { IconEdit, IconTrash, IconPlus, IconEye, IconEyeOff } from '@/components/ui/icons';
+import { IconEdit, IconTrash, IconPlus, IconEye, IconEyeOff, IconExternal } from '@/components/ui/icons';
 import { ClassicLoader } from '@/components/ui/ClassicLoader';
 import { LoadingButton } from '@/components/ui/LoadingButton';
 
@@ -52,16 +52,28 @@ export function AdminScreen() {
   const [showFeatForm, setShowFeatForm] = useState(false);
 
   const verifyAdminSession = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setAuthed(false);
+        return;
+      }
+      const res = await fetch('/api/admin/featured-songs');
+      if (res.ok) {
+        setAuthed(true);
+        return;
+      }
+      // Session exists but is not the admin account — clear it so the login form works.
+      await supabase.auth.signOut();
       setAuthed(false);
+      setErr(t('admin.notAdmin'));
+    } catch {
+      setAuthed(false);
+      setErr(t('admin.notAdmin'));
+    } finally {
       setAuthChecked(true);
-      return;
     }
-    const res = await fetch('/api/admin/featured-songs');
-    setAuthed(res.ok);
-    setAuthChecked(true);
-  }, [supabase.auth]);
+  }, [supabase.auth, t]);
 
   const loadFeaturedSongs = useCallback(async () => {
     setFeatsLoading(true);
@@ -228,9 +240,32 @@ export function AdminScreen() {
         <div className="nav-inner">
           <Logo />
           <span style={{ fontSize: 13, color: 'var(--text-3)' }}>{t('admin.brand')}</span>
-          <button className="btn btn-ghost btn-sm" onClick={logout}>{t('admin.logout')}</button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <a
+              href="/dashboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary btn-sm"
+              style={{ gap: 6 }}
+            >
+              {t('admin.openMusic')} <IconExternal size={14} />
+            </a>
+            <a
+              href="/upload"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-ghost btn-sm"
+            >
+              {t('admin.openUpload')}
+            </a>
+            <button className="btn btn-ghost btn-sm" onClick={logout}>{t('admin.logout')}</button>
+          </div>
         </div>
       </nav>
+
+      <div className="wrap" style={{ paddingTop: 24, paddingBottom: 16 }}>
+        <p className="muted" style={{ fontSize: 13, margin: 0 }}>{t('admin.openMusicSub')}</p>
+      </div>
 
       <div className="wrap" style={{ paddingTop: 40, paddingBottom: 80 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>

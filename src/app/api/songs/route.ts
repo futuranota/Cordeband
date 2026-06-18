@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAdminUser } from '@/lib/admin-auth';
 import { dispatchSongProcessing } from '@/lib/audio-processor';
 import { includedSongQuota } from '@/lib/plans';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -82,20 +83,24 @@ export async function POST(request: Request) {
 
   const profile = await getProfile(supabase, user.id);
   const plan = normalizePlan(profile?.plan);
-  const limit = includedSongQuota(plan);
+  const isAdmin = isAdminUser(user.id);
 
-  const { count, error: countErr } = await supabase
-    .from('songs')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .eq('source_type', 'upload')
-    .neq('status', 'failed');
+  if (!isAdmin) {
+    const limit = includedSongQuota(plan);
 
-  if (countErr) {
-    return NextResponse.json({ error: countErr.message }, { status: 500 });
-  }
-  if ((count ?? 0) >= limit) {
-    return NextResponse.json({ error: 'Song limit reached for your plan' }, { status: 403 });
+    const { count, error: countErr } = await supabase
+      .from('songs')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('source_type', 'upload')
+      .neq('status', 'failed');
+
+    if (countErr) {
+      return NextResponse.json({ error: countErr.message }, { status: 500 });
+    }
+    if ((count ?? 0) >= limit) {
+      return NextResponse.json({ error: 'Song limit reached for your plan' }, { status: 403 });
+    }
   }
 
   const title = titleRaw || titleFromFileName(audio.name);

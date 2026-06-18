@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/admin-auth';
+import { requireAdmin } from '@/lib/admin-auth-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runMockFeaturedProcessor } from '@/lib/mock-audio-processor';
 
