@@ -45,13 +45,13 @@ export function ForgotPasswordForm() {
     return (
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
-          <div className="auth-form auth-form-status" style={{ textAlign: 'center' }}>
+          <div className="auth-form auth-form-status">
             <span className="eyebrow">{t('auth.resetEmailEyebrow')}</span>
-            <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.resetEmailSent')}</h1>
-            <p className="lead" style={{ fontSize: 15, marginTop: 12 }}>{t('auth.resetEmailSentSub')}</p>
-            <p className="muted" style={{ marginTop: 16, fontSize: 14 }}>{email}</p>
-            <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>{t('auth.resetEmailSpam')}</p>
-            <Link href="/login" className="btn btn-primary btn-block btn-lg" style={{ marginTop: 28 }}>
+            <h1 className="h2">{t('auth.resetEmailSent')}</h1>
+            <p className="lead">{t('auth.resetEmailSentSub')}</p>
+            <p className="muted auth-email-display">{email}</p>
+            <p className="muted auth-spam-hint">{t('auth.resetEmailSpam')}</p>
+            <Link href="/login" className="btn btn-primary btn-block btn-lg auth-status-cta">
               {t('auth.backToLogin')}
             </Link>
           </div>
@@ -64,13 +64,13 @@ export function ForgotPasswordForm() {
     <main className="wrap app-main page">
       <div className="auth-wrap auth-wrap-single">
         <form className="auth-form" onSubmit={handleSubmit}>
-          <Link href="/login" className="btn btn-ghost btn-sm" style={{ marginBottom: 20, alignSelf: 'flex-start' }}>
+          <Link href="/login" className="btn btn-ghost btn-sm auth-back-btn">
             <IconArrowL size={15} /> {t('auth.backToLogin')}
           </Link>
 
           <span className="eyebrow">{t('auth.forgotPassword')}</span>
-          <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.forgotTitle')}</h1>
-          <p className="lead" style={{ fontSize: 15, marginTop: 12, marginBottom: 26 }}>{t('auth.forgotSub')}</p>
+          <h1 className="h2">{t('auth.forgotTitle')}</h1>
+          <p className="lead">{t('auth.forgotSub')}</p>
 
           <div className="auth-field">
             <label className="field-label">{t('auth.email')}</label>

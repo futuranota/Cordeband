@@ -70,7 +70,7 @@ export function PriceCard({ tier, billingPeriod, onBillingChange }: PriceCardPro
         </span>
       )}
 
-      <div className="row spread" style={{ alignItems: 'flex-start' }}>
+      <div className="row spread price-card-head" style={{ alignItems: 'flex-start' }}>
         <div>
           <div className="eyebrow" style={{ color: 'rgb(255, 255, 255)' }}>{d.label}</div>
           <div style={{ marginTop: 10 }}>

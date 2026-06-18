@@ -70,7 +70,7 @@ export function ResetPasswordForm() {
     return (
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
-          <div className="auth-form" style={{ textAlign: 'center' }}>
+          <div className="auth-form auth-form-status">
             <p className="muted">…</p>
           </div>
         </div>
@@ -82,13 +82,13 @@ export function ResetPasswordForm() {
     return (
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
-          <div className="auth-form" style={{ textAlign: 'center' }}>
+          <div className="auth-form auth-form-status">
             <span className="eyebrow">{t('auth.resetTitle')}</span>
-            <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.resetInvalid')}</h1>
-            <Link href="/forgot-password" className="btn btn-primary btn-block btn-lg" style={{ marginTop: 28 }}>
+            <h1 className="h2">{t('auth.resetInvalid')}</h1>
+            <Link href="/forgot-password" className="btn btn-primary btn-block btn-lg auth-status-cta">
               {t('auth.forgotPassword')}
             </Link>
-            <Link href="/login" className="btn btn-ghost btn-block" style={{ marginTop: 12 }}>
+            <Link href="/login" className="btn btn-ghost btn-block auth-secondary-cta">
               {t('auth.backToLogin')}
             </Link>
           </div>
@@ -101,11 +101,11 @@ export function ResetPasswordForm() {
     return (
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
-          <div className="auth-form" style={{ textAlign: 'center' }}>
+          <div className="auth-form auth-form-status">
             <span className="eyebrow">{t('auth.resetSuccess')}</span>
-            <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.resetSuccess')}</h1>
-            <p className="lead" style={{ fontSize: 15, marginTop: 12 }}>{t('auth.resetSuccessSub')}</p>
-            <Link href="/login" className="btn btn-primary btn-block btn-lg" style={{ marginTop: 28 }}>
+            <h1 className="h2">{t('auth.resetSuccess')}</h1>
+            <p className="lead">{t('auth.resetSuccessSub')}</p>
+            <Link href="/login" className="btn btn-primary btn-block btn-lg auth-status-cta">
               {t('auth.backToLogin')}
             </Link>
           </div>
@@ -119,8 +119,8 @@ export function ResetPasswordForm() {
       <div className="auth-wrap auth-wrap-single">
         <form className="auth-form" onSubmit={handleSubmit}>
           <span className="eyebrow">{t('auth.resetTitle')}</span>
-          <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.resetTitle')}</h1>
-          <p className="lead" style={{ fontSize: 15, marginTop: 12, marginBottom: 26 }}>{t('auth.resetSub')}</p>
+          <h1 className="h2">{t('auth.resetTitle')}</h1>
+          <p className="lead">{t('auth.resetSub')}</p>
 
           <div className="auth-field">
             <label className="field-label">{t('auth.newPass')}</label>

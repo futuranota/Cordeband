@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Logo } from './Logo';
 import { LangToggle } from '@/components/ui/LangToggle';
+import { MobileNavSheet } from './MobileNavSheet';
 import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
 import { IconPlus, IconCrown, IconLogout, IconReset } from '@/components/ui/icons';
@@ -16,12 +17,12 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
   const { t } = useT();
   const pathname = usePathname();
   const router = useRouter();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [acctOpen, setAcctOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function close(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setAcctOpen(false);
     }
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
@@ -39,8 +40,14 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
     { href: '/dashboard', label: t('nav.library') },
     { href: '/instrument', label: t('nav.practice') },
     ...(plan === 'banda' ? [{ href: '/band', label: t('nav.band') }] : []),
+    { href: '/upload', label: t('nav.add') },
     { href: '/profile', label: t('nav.subscription') },
   ];
+
+  const mobileItems = links.map((l) => ({
+    ...l,
+    active: pathname === l.href,
+  }));
 
   const ini = user.name?.[0]?.toUpperCase() ?? '?';
 
@@ -53,10 +60,11 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
   return (
     <nav className="nav">
       <div className="nav-inner">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div className="nav-brand-row">
+          <MobileNavSheet title="Cordeband" items={mobileItems} />
           <Logo />
           <div className="nav-links">
-            {links.map(l => (
+            {links.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
@@ -68,11 +76,11 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="nav-actions">
           <LangToggle />
           <Link href="/upload" className="btn btn-primary btn-sm" style={{ gap: 6 }}>
             <IconPlus size={15} />
-            {t('nav.add')}
+            <span className="nav-add-label">{t('nav.add')}</span>
           </Link>
           {plan !== 'free' && (
             <span className="badge-pro">
@@ -81,10 +89,9 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
             </span>
           )}
 
-          {/* Avatar menu */}
           <div style={{ position: 'relative' }} ref={menuRef}>
-            <button className="avatar" onClick={() => setMenuOpen(o => !o)}>{ini}</button>
-            {menuOpen && (
+            <button type="button" className="avatar" onClick={() => setAcctOpen((o) => !o)}>{ini}</button>
+            {acctOpen && (
               <div className="acct-menu">
                 <div className="acct-head">
                   <div className="avatar" style={{ cursor: 'default' }}>{ini}</div>
@@ -93,14 +100,18 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
                     <p className="muted" style={{ margin: 0, fontSize: 12 }}>{planLabel[plan]}</p>
                   </div>
                 </div>
-                <button className="acct-item" onClick={logout}>
+                <button type="button" className="acct-item" onClick={logout}>
                   <IconLogout size={16} />
                   {t('acct.logout')}
                 </button>
-                <button className="acct-item" onClick={() => {
-                  localStorage.removeItem('cordeband_state_v1');
-                  window.location.reload();
-                }}>
+                <button
+                  type="button"
+                  className="acct-item"
+                  onClick={() => {
+                    localStorage.removeItem('cordeband_state_v1');
+                    window.location.reload();
+                  }}
+                >
                   <IconReset size={16} />
                   {t('acct.reset')}
                 </button>

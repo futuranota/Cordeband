@@ -33,7 +33,7 @@ export function BandShareSection() {
     <section id="band" className="section bandshare">
       <div className="wrap">
         <div className="bandshare-grid">
-          <div>
+          <div className="bandshare-copy">
             <p className="eyebrow" style={{ color: BAND_CYAN }}>{t('band.eyebrow')}</p>
             <h2 className="h2" style={{ marginTop: 14 }}>{t('band.title')}</h2>
             <p className="lead" style={{ marginTop: 18 }}>{t('band.sub')}</p>

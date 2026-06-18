@@ -43,7 +43,7 @@ import { buildTimelineLanes } from '@/lib/band-timeline';
 import {
   IconPlay, IconPause, IconArrow, IconArrowL, IconLoop, IconGauge, IconVolume, IconMute,
   IconWave, IconSpark, IconClock, IconCheck, IconReset, IconUpload, IconExternal, IconCart,
-  IconCrown, IconBand,
+  IconCrown, IconBand, IconRotate,
 } from '@/components/ui/icons';
 
 const SONG = LIBRARY[0];
@@ -606,35 +606,48 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   return (
     <main className="wrap app-main page">
-      <div className="row spread" style={{ marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <Link href="/instrument" className="btn btn-ghost btn-sm">
-          <IconArrowL size={15} /> {t('player.changeInst')}
-        </Link>
+      <div className="player-top">
+        <div className="player-top-row">
+          <Link href="/instrument" className="btn btn-ghost btn-sm">
+            <IconArrowL size={15} /> {t('player.changeInst')}
+          </Link>
 
-        {showModeToggle && (
-          <div className="demo-mode-toggle" role="tablist" aria-label={t('bandDemo.toggleLabel')}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === 'solo'}
-              className={viewMode === 'solo' ? 'on' : ''}
-              onClick={() => setViewMode('solo')}
-            >
-              <IconCrown size={14} />
-              {t('bandDemo.solo')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === 'banda'}
-              className={viewMode === 'banda' ? 'on' : ''}
-              onClick={() => setViewMode('banda')}
-            >
-              <IconBand size={14} />
-              {t('bandDemo.banda')}
-            </button>
-          </div>
-        )}
+          {showModeToggle ? (
+            <div className="player-mode-stack">
+              <div className="demo-mode-toggle" role="tablist" aria-label={t('bandDemo.toggleLabel')}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'solo'}
+                  className={viewMode === 'solo' ? 'on' : ''}
+                  onClick={() => setViewMode('solo')}
+                >
+                  <IconCrown size={14} />
+                  {t('bandDemo.solo')}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'banda'}
+                  className={viewMode === 'banda' ? 'on' : ''}
+                  onClick={() => setViewMode('banda')}
+                >
+                  <IconBand size={14} />
+                  {t('bandDemo.banda')}
+                </button>
+              </div>
+              <div className="player-rotate-hint" role="note">
+                <IconRotate size={18} />
+                <span>{t('player.rotateScreen')}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="player-rotate-hint player-rotate-hint--inline" role="note">
+              <IconRotate size={18} />
+              <span>{t('player.rotateScreen')}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {isBandView ? (

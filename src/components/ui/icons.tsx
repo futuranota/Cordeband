@@ -40,6 +40,14 @@ export const IconCrown = (p: IconProps) => <I {...p}><path d="M4 8l3.5 3L12 5l4.
 export const IconGrid = (p: IconProps) => <I {...p}><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></I>;
 export const IconClose = (p: IconProps) => <I {...p} sw={1.8}><path d="M6 6l12 12M18 6 6 18" /></I>;
 export const IconMenu = (p: IconProps) => <I {...p}><path d="M4 7h16M4 12h16M4 17h16" /></I>;
+export const IconRotate = (p: IconProps) => (
+  <I {...p}>
+    <rect x="6" y="3" width="12" height="18" rx="2" />
+    <path d="M12 19v.5" strokeWidth={2.2} />
+    <path d="M2 12h2.5M3.5 9.5 2 11M3.5 14.5 2 13" />
+    <path d="M22 12h-2.5M20.5 9.5 22 11M20.5 14.5 22 13" />
+  </I>
+);
 export const IconNote = (p: IconProps) => <I {...p}><circle cx="7" cy="17" r="3" /><path d="M10 17V5l9-2v11" /><circle cx="16" cy="14" r="3" /></I>;
 export const IconWave = (p: IconProps) => <I {...p}><path d="M3 12h2.5l2-6 3 14 3-11 2 5 2.5-2H21" /></I>;
 export const IconCart = (p: IconProps) => <I {...p}><path d="M4 5h2l2 11h9l2-7H7" /><circle cx="9.5" cy="19.5" r="1.3" fill="currentColor" stroke="none" /><circle cx="16.5" cy="19.5" r="1.3" fill="currentColor" stroke="none" /></I>;

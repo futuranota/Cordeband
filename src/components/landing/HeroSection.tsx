@@ -38,7 +38,7 @@ export function HeroSection() {
           <IconSpark size={13} />
           {t('hero.badge')}
         </span>
-        <h1 className="h1" style={{ color: 'rgb(255, 255, 255)', fontSize: 48 }}>
+        <h1 className="h1" style={{ color: 'rgb(255, 255, 255)' }}>
           {t('hero.t1')}
           <span className="ink-em" style={{ color: 'rgb(252, 252, 252)' }}>{t('hero.em')}</span>
           {t('hero.t2')}
@@ -74,7 +74,7 @@ export function HeroSection() {
         <img className="hero-guitar" src="/assets/guitar-black.png" alt="Guitarra eléctrica negra" />
 
         <div className="hero-demo-float">
-          <div className="card demo-card" style={{ borderRadius: 16, height: 280, width: 320 }}>
+          <div className="card demo-card">
             <div className="row spread" style={{ marginBottom: 14, alignItems: 'flex-start', gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <div className="acc-text" style={{ fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap', fontWeight: 700, color: 'rgb(161, 161, 161)' }}>

@@ -73,7 +73,7 @@ export function SignupForm({ mode }: { mode: Mode }) {
     router.refresh();
   }
 
-  async function handleOAuth(provider: 'google' | 'apple') {
+  async function handleOAuth(provider: 'google') {
     setError('');
     const origin = window.location.origin;
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -142,13 +142,13 @@ export function SignupForm({ mode }: { mode: Mode }) {
     return (
       <main className="wrap app-main page">
         <div className="auth-wrap auth-wrap-single">
-          <div className="auth-form auth-form-status" style={{ textAlign: 'center' }}>
+          <div className="auth-form auth-form-status">
             <span className="eyebrow">{t('auth.checkEmailEyebrow')}</span>
-            <h1 className="h2" style={{ marginTop: 14 }}>{t('auth.checkEmail')}</h1>
-            <p className="lead" style={{ fontSize: 15, marginTop: 12 }}>{t('auth.checkEmailSub')}</p>
-            <p className="muted" style={{ marginTop: 16, fontSize: 14 }}>{email}</p>
-            <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>{t('auth.checkEmailSpam')}</p>
-            <Link href="/login" className="btn btn-primary btn-block btn-lg" style={{ marginTop: 28 }}>
+            <h1 className="h2">{t('auth.checkEmail')}</h1>
+            <p className="lead">{t('auth.checkEmailSub')}</p>
+            <p className="muted auth-email-display">{email}</p>
+            <p className="muted auth-spam-hint">{t('auth.checkEmailSpam')}</p>
+            <Link href="/login" className="btn btn-primary btn-block btn-lg auth-status-cta">
               {t('nav.login')}
             </Link>
           </div>
@@ -162,11 +162,11 @@ export function SignupForm({ mode }: { mode: Mode }) {
       <div className={`auth-wrap${isLogin ? ' auth-wrap-single' : ''}`}>
         <form className="auth-form" onSubmit={handleSubmit}>
           <span className="eyebrow">{isLogin ? t('nav.login') : t('auth.eyebrow')}</span>
-          <h1 className="h2" style={{ marginTop: 14 }}>{isLogin ? t('nav.login') : t('auth.title')}</h1>
-          <p className="lead" style={{ fontSize: 15, marginTop: 12, marginBottom: 26 }}>{t('auth.sub')}</p>
+          <h1 className="h2">{isLogin ? t('nav.login') : t('auth.title')}</h1>
+          <p className="lead">{t('auth.sub')}</p>
 
           {!isLogin && isPaidPlan(selectedPlan) && (
-            <div className="auth-plan-badge" style={{ marginBottom: 20 }}>
+            <div className="auth-plan-badge auth-plan-badge-inline">
               {planBadgeLabel(t, selectedPlan)}
             </div>
           )}
@@ -219,8 +219,7 @@ export function SignupForm({ mode }: { mode: Mode }) {
             {isLogin && (
               <Link
                 href="/forgot-password"
-                className="auth-link"
-                style={{ fontSize: 13, display: 'inline-block', marginTop: 10 }}
+                className="auth-link auth-forgot-link"
               >
                 {t('auth.forgotPassword')}
               </Link>
@@ -245,9 +244,6 @@ export function SignupForm({ mode }: { mode: Mode }) {
             <button type="button" className="btn btn-ghost btn-block" onClick={() => handleOAuth('google')}>
               {t('auth.google')}
             </button>
-            <button type="button" className="btn btn-ghost btn-block" onClick={() => handleOAuth('apple')}>
-              {t('auth.apple')}
-            </button>
           </div>
 
           <div className="auth-foot">
@@ -256,7 +252,7 @@ export function SignupForm({ mode }: { mode: Mode }) {
               {isLogin ? t('nav.start') : t('auth.loginLink')}
             </Link>
           </div>
-          <p className="muted" style={{ fontSize: 11.5, marginTop: 16, lineHeight: 1.5 }}>{t('auth.terms')}</p>
+          <p className="muted auth-terms">{t('auth.terms')}</p>
         </form>
 
         {!isLogin && (
