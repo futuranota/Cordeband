@@ -10,10 +10,11 @@ import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
 import { IconPlus, IconCrown, IconLogout, IconReset } from '@/components/ui/icons';
 
-type User = { name: string; email: string };
-type Plan = 'free' | 'pro' | 'banda';
+import { getPlanLabel, type PlanId } from '@/lib/plans';
 
-export function AppNav({ user, plan }: { user: User; plan: Plan }) {
+type User = { name: string; email: string };
+
+export function AppNav({ user, plan }: { user: User; plan: PlanId }) {
   const { t } = useT();
   const pathname = usePathname();
   const router = useRouter();
@@ -51,10 +52,10 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
 
   const ini = user.name?.[0]?.toUpperCase() ?? '?';
 
-  const planLabel: Record<Plan, string> = {
+  const planLabel: Record<PlanId, string> = {
     free: t('nav.freePlan'),
-    pro: 'Pro',
-    banda: 'Banda',
+    pro: getPlanLabel('pro', t),
+    banda: getPlanLabel('banda', t),
   };
 
   return (
@@ -85,7 +86,7 @@ export function AppNav({ user, plan }: { user: User; plan: Plan }) {
           {plan !== 'free' && (
             <span className="badge-pro">
               <IconCrown size={12} />
-              {plan === 'banda' ? 'Banda' : 'Pro'}
+              {getPlanLabel(plan, t)}
             </span>
           )}
 

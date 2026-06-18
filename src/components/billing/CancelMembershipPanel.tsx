@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
 import { IconLogout, IconCheck } from '@/components/ui/icons';
-import type { PlanId } from '@/lib/plans';
+import { LoadingButton } from '@/components/ui/LoadingButton';
+import { getPlanLabel, type PlanId } from '@/lib/plans';
 
 type CancelMembershipPanelProps = {
   userId: string;
@@ -19,7 +20,7 @@ export function CancelMembershipPanel({ userId, plan }: CancelMembershipPanelPro
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
 
-  const planLabel = plan === 'banda' ? t('common.banda') : 'Pro';
+  const planLabel = getPlanLabel(plan, t);
 
   async function confirmCancel() {
     setConfirming(true);
@@ -65,14 +66,14 @@ export function CancelMembershipPanel({ userId, plan }: CancelMembershipPanelPro
                 <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>
                   {t('cancel.keep')}
                 </button>
-                <button
+                <LoadingButton
                   type="button"
                   className="btn cancel-confirm"
-                  disabled={confirming}
+                  loading={confirming}
                   onClick={confirmCancel}
                 >
-                  {confirming ? '…' : t('cancel.confirm')}
-                </button>
+                  {t('cancel.confirm')}
+                </LoadingButton>
               </div>
             </>
           ) : (

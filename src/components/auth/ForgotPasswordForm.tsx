@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useT } from '@/i18n/context';
 import { IconArrow, IconArrowL } from '@/components/ui/icons';
+import { LoadingButton } from '@/components/ui/LoadingButton';
 import { createClient } from '@/lib/supabase/client';
 
 export function ForgotPasswordForm() {
@@ -27,7 +28,7 @@ export function ForgotPasswordForm() {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent('/reset-password')}`,
       });
-
+     
       if (resetError) {
         setError(resetError.message);
         return;
@@ -89,14 +90,15 @@ export function ForgotPasswordForm() {
             <p style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 12 }}>{error}</p>
           )}
 
-          <button
+          <LoadingButton
             type="submit"
             className="btn btn-primary btn-block btn-lg"
-            disabled={!valid || loading}
+            loading={loading}
+            disabled={!valid}
             style={{ marginTop: 8 }}
           >
-            {loading ? '…' : t('auth.sendResetLink')} <IconArrow size={17} />
-          </button>
+            {t('auth.sendResetLink')} <IconArrow size={17} />
+          </LoadingButton>
         </form>
       </div>
     </main>

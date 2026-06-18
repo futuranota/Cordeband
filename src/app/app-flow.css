@@ -867,25 +867,88 @@
 /* ============================================================
    BILLING — upgrade, add-on, cancel
    ============================================================ */
-.upgrade-banner{
-  position:relative; overflow:hidden; margin-bottom:28px;
-  border-radius:var(--radius); border:1px solid var(--acc-line);
-  background:linear-gradient(135deg, rgba(79,184,255,.12), var(--elev));
+.upgrade-pill-wrap{
+  display:flex; align-items:center; justify-content:center;
+  padding:10px var(--gutter) 0;
+  background:var(--surface);
 }
-.upgrade-banner-glow{
-  position:absolute; inset:-40% auto auto -10%; width:280px; height:280px; border-radius:50%;
-  background:radial-gradient(circle, rgba(79,184,255,.22), transparent 70%); pointer-events:none;
+.upgrade-pill-shell{
+  position:relative;
+  opacity:0; transform:translateX(24px);
+  transition:opacity .35s ease, transform .35s ease;
 }
-.upgrade-banner-inner{
-  position:relative; display:flex; align-items:center; justify-content:space-between; gap:20px;
-  padding:22px 24px; flex-wrap:wrap;
+.upgrade-pill-shell.is-visible{
+  opacity:1; transform:translateX(0);
 }
-.upgrade-banner-badge{
-  display:inline-flex; align-items:center; gap:6px;
-  font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
-  color:var(--acc); margin-bottom:8px;
+.upgrade-pill{
+  position:relative;
+  display:flex; align-items:center; gap:6px;
+  min-height:35px; max-width:min(100%, 920px);
+  padding:0 4px 0 10px;
+  border-radius:6px;
+  border:1px solid rgba(79,184,255,.35);
+  background:linear-gradient(180deg, rgba(79,184,255,.14), rgba(79,184,255,.06));
 }
-.upgrade-banner-title{ margin:0; font-family:var(--display); font-weight:800; font-size:clamp(20px,2.5vw,26px); color:#fff; }
+.upgrade-pill-cta{
+  margin:-1px 0; padding:6px 0;
+  border:none; background:transparent;
+  font:inherit; font-size:13px; font-weight:600;
+  color:var(--text);
+  text-decoration:underline; text-decoration-color:rgba(79,184,255,.35);
+  text-underline-offset:5px;
+  cursor:pointer; white-space:nowrap;
+  transition:color .15s ease, text-decoration-color .15s ease;
+}
+.upgrade-pill-cta:hover{
+  color:var(--acc);
+  text-decoration-color:rgba(79,184,255,.65);
+}
+.upgrade-pill-desc{
+  flex:1; min-width:0;
+  font-size:13px; line-height:1.35;
+  color:var(--acc);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.upgrade-pill-close{
+  display:flex; align-items:center; justify-content:center;
+  width:24px; height:24px; flex-shrink:0;
+  margin:0; padding:0; border:none; border-radius:4px;
+  background:transparent; color:var(--acc);
+  cursor:pointer;
+  transition:background .15s ease;
+}
+.upgrade-pill-close:hover{ background:rgba(79,184,255,.16); }
+.upgrade-pill-icon{
+  position:absolute; pointer-events:none;
+  color:var(--acc);
+  opacity:0; transform:translate(0,0) rotate(0deg) scale(.85);
+  transition:opacity .25s ease, transform .35s cubic-bezier(.22,1,.36,1);
+}
+.upgrade-pill-shell:hover .upgrade-pill-icon{
+  opacity:1;
+}
+.upgrade-pill-shell:hover .upgrade-pill-icon-a{
+  transform:translate(-10px,-10px) rotate(360deg) scale(1);
+}
+.upgrade-pill-shell:hover .upgrade-pill-icon-b{
+  transform:translate(10px,10px) rotate(360deg) scale(1);
+}
+.upgrade-pill-icon-a{ left:4px; top:2px; }
+.upgrade-pill-icon-b{ left:6.5rem; bottom:2px; }
+
+@media (max-width: 720px){
+  .upgrade-pill-wrap{ padding-inline:16px; }
+  .upgrade-pill{
+    flex-wrap:wrap; min-height:auto;
+    padding:8px 4px 8px 10px; gap:4px 8px;
+  }
+  .upgrade-pill-desc{
+    flex-basis:calc(100% - 32px);
+    white-space:normal;
+  }
+  .upgrade-pill-close{ margin-left:auto; }
+  .upgrade-pill-icon-b{ left:5rem; }
+}
 
 .upgrade-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
 .upgrade-card{
@@ -921,7 +984,43 @@
 .profile-feats{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
 .profile-feats li{ display:flex; align-items:flex-start; gap:8px; font-size:13.5px; color:var(--text-2); }
 .profile-feats li svg{ color:var(--acc); flex:0 0 auto; margin-top:2px; }
-.profile-pending{ border-color:var(--acc-line) !important; background:var(--elev) !important; }
+.profile-pending{ border-color:var(--acc-line) !important; background:var(--elev) !important; padding:22px; }
+.profile-plan-strip{
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  margin-bottom:24px; padding:16px 18px;
+  border-radius:var(--radius); border:1px solid var(--line); background:var(--elev);
+}
+.profile-plan-strip-user{ display:flex; align-items:center; gap:12px; min-width:0; }
+.profile-plan-strip-name{ margin:0; font-weight:700; font-size:14px; }
+.profile-plan-strip-email{ margin:2px 0 0; font-size:12px; }
+.profile-plan-strip-meta{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.profile-plan-badge{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 12px; border-radius:999px;
+  font-size:12px; font-weight:700; letter-spacing:.02em;
+  border:1px solid var(--line); background:var(--elev-2); color:var(--text-2);
+}
+.profile-plan-badge.pro{ border-color:var(--acc-line); background:var(--acc-soft); color:var(--acc); }
+.profile-plan-badge.band{ border-color:var(--acc-line); background:var(--acc-soft); color:var(--acc); }
+.profile-plan-badge.free{ color:var(--text-3); }
+.profile-plan-pending{ font-size:10px; }
+.profile-page-title{ margin:0 0 24px; }
+.profile-pending-inline{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  margin-bottom:20px; padding:14px 16px;
+  border-radius:var(--radius-sm); border:1px solid var(--acc-line);
+  background:linear-gradient(180deg, rgba(79,184,255,.1), var(--elev));
+}
+.profile-pending-label{ margin:0; font-weight:700; font-size:14px; color:var(--acc); }
+.profile-section{ margin-bottom:24px; }
+.profile-plans-section,
+.profile-addon-section{
+  scroll-margin-top:88px;
+}
+.profile-addon-section{
+  padding-top:8px;
+  border-top:1px solid var(--line);
+}
 
 .addon-card{ padding:22px; margin-bottom:0; }
 .addon-price-tag{ text-align:right; }

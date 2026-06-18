@@ -10,6 +10,7 @@ import { canUseBandPlayer } from '@/lib/plan-access';
 import { normalizePlan } from '@/lib/supabase/profile';
 import type { BandMemberRecord, BandRoomRecord } from '@/types/band';
 import { IconBand } from '@/components/ui/icons';
+import { ClassicLoader } from '@/components/ui/ClassicLoader';
 
 const SONG = LIBRARY[0];
 
@@ -124,8 +125,8 @@ export function BandScreen() {
             <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               {t('room.code')}
             </p>
-            <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--acc)', margin: '0 0 14px', fontFamily: 'monospace' }}>
-              {loading && !room ? '…' : room?.code ?? '—'}
+            <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--acc)', margin: '0 0 14px', fontFamily: 'monospace', minHeight: 40, display: 'flex', alignItems: 'center' }}>
+              {loading && !room ? <ClassicLoader size="sm" /> : room?.code ?? '—'}
             </p>
             <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 10px' }}>{t('room.share')}</p>
             <div style={{ display: 'flex', gap: 8 }}>

@@ -6,6 +6,7 @@ import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
 import { PLAN_PRICE, type PlanId } from '@/lib/plans';
 import { IconCrown, IconBand, IconCheck, IconSpark } from '@/components/ui/icons';
+import { LoadingButton } from '@/components/ui/LoadingButton';
 
 type UpgradePlanCardsProps = {
   userId: string;
@@ -92,14 +93,14 @@ export function UpgradePlanCards({ userId, selected, onSelect }: UpgradePlanCard
                 </li>
               ))}
             </ul>
-            <button
+            <LoadingButton
               type="button"
               className={`btn btn-block${popular ? ' btn-primary' : ' btn-ghost'}`}
-              disabled={isLoading}
+              loading={isLoading}
               onClick={() => pick(plan)}
             >
-              {isLoading ? '…' : isSelected ? t('upgrade.selected') : t(`upgrade.cta${plan === 'pro' ? 'Pro' : 'Banda'}`)}
-            </button>
+              {isSelected ? t('upgrade.selected') : t(`upgrade.cta${plan === 'pro' ? 'Pro' : 'Banda'}`)}
+            </LoadingButton>
           </div>
         );
       })}

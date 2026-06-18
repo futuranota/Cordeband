@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/i18n/context';
 import type { Song } from '@/lib/data';
 import { IconCheck, IconSpin, IconWave } from '@/components/ui/icons';
+import { LoadingButton } from '@/components/ui/LoadingButton';
 
 type Props = {
   onSaved: (song: Song) => void;
@@ -229,9 +230,9 @@ export function FeaturedSongForm({ onSaved, onCancel }: Props) {
       </div>
       {error && <p style={{ color: '#ef4444', fontSize: 13, margin: '14px 0 0' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-        <button className="btn btn-primary btn-sm" type="submit" disabled={submitting}>
+        <LoadingButton className="btn btn-primary btn-sm" type="submit" loading={submitting}>
           {t('admin.featProcessSave')}
-        </button>
+        </LoadingButton>
         <button className="btn btn-ghost btn-sm" type="button" onClick={onCancel} disabled={submitting}>
           {t('admin.cancel')}
         </button>

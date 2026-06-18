@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useT } from '@/i18n/context';
 import { ADDON_SONG_PRICE } from '@/lib/plans';
 import { IconPlus, IconCheck } from '@/components/ui/icons';
+import { LoadingButton } from '@/components/ui/LoadingButton';
 
 type AddonSongCardProps = {
   used: number;
@@ -13,12 +14,17 @@ type AddonSongCardProps = {
 export function AddonSongCard({ used, total }: AddonSongCardProps) {
   const { t } = useT();
   const [qty, setQty] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(false);
   const atLimit = used >= total;
 
   function buy() {
-    setToast(true);
-    setTimeout(() => setToast(false), 2800);
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setToast(true);
+      setTimeout(() => setToast(false), 2800);
+    }, 600);
   }
 
   return (
@@ -44,11 +50,11 @@ export function AddonSongCard({ used, total }: AddonSongCardProps) {
           <button type="button" className="iconbtn" onClick={() => setQty((q) => q + 1)}>+</button>
           <span className="muted" style={{ fontSize: 13 }}>{qty === 1 ? t('addon.song') : t('addon.songs')}</span>
         </div>
-        <button type="button" className="btn btn-primary" onClick={buy}>
+        <LoadingButton type="button" className="btn btn-primary" loading={loading} onClick={buy}>
           <IconPlus size={15} />
           {t('addon.cta')} · {ADDON_SONG_PRICE}
           {qty > 1 ? ` × ${qty}` : ''}
-        </button>
+        </LoadingButton>
       </div>
 
       {toast && (

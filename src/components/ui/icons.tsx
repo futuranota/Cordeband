@@ -33,6 +33,8 @@ export const IconSpin = (p: IconProps) => <I {...p}><path d="M12 3a9 9 0 1 0 9 9
 export const IconExternal = (p: IconProps) => <I {...p}><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></I>;
 export const IconVolume = (p: IconProps) => <I {...p}><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M16.5 8.5a5 5 0 0 1 0 7" /></I>;
 export const IconMute = (p: IconProps) => <I {...p}><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M16 9.5l4 5M20 9.5l-4 5" /></I>;
+export const IconEye = (p: IconProps) => <I {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></I>;
+export const IconEyeOff = (p: IconProps) => <I {...p}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" /><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" /><path d="M1 1l22 22" /><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" /></I>;
 export const IconLoop = (p: IconProps) => <I {...p}><path d="M4 9a5 5 0 0 1 5-5h7l-2.5-2.5M20 15a5 5 0 0 1-5 5H8l2.5 2.5" /></I>;
 export const IconGauge = (p: IconProps) => <I {...p}><path d="M12 13l4-4" /><path d="M4.5 17a9 9 0 1 1 15 0" /></I>;
 export const IconClock = (p: IconProps) => <I {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></I>;

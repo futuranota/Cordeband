@@ -9,7 +9,9 @@ import {
   loadAdminAffiliates, saveAdminAffiliates,
   type AffiliateProduct, type Song,
 } from '@/lib/data';
-import { IconEdit, IconTrash, IconPlus, IconVolume, IconMute } from '@/components/ui/icons';
+import { IconEdit, IconTrash, IconPlus, IconEye, IconEyeOff } from '@/components/ui/icons';
+import { ClassicLoader } from '@/components/ui/ClassicLoader';
+import { LoadingButton } from '@/components/ui/LoadingButton';
 
 type Tab = 'aff' | 'feat';
 
@@ -32,6 +34,8 @@ export function AdminScreen() {
   const [pass, setPass] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [featBusyId, setFeatBusyId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('aff');
 
   /* Affiliates state */
@@ -82,22 +86,27 @@ export function AdminScreen() {
   async function login(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: pass,
-    });
-    if (error) {
-      setErr(t('admin.wrong'));
-      return;
+    setLoginLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: pass,
+      });
+      if (error) {
+        setErr(t('admin.wrong'));
+        return;
+      }
+      const res = await fetch('/api/admin/featured-songs');
+      if (!res.ok) {
+        await supabase.auth.signOut();
+        setAuthed(false);
+        setErr(t('admin.notAdmin'));
+        return;
+      }
+      setAuthed(true);
+    } finally {
+      setLoginLoading(false);
     }
-    const res = await fetch('/api/admin/featured-songs');
-    if (!res.ok) {
-      await supabase.auth.signOut();
-      setAuthed(false);
-      setErr(t('admin.notAdmin'));
-      return;
-    }
-    setAuthed(true);
   }
 
   async function logout() {
@@ -131,27 +140,37 @@ export function AdminScreen() {
   }
 
   async function toggleFeatPublish(song: Song) {
-    const res = await fetch(`/api/admin/featured-songs/${song.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isPublic: !song.published }),
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    setFeats((prev) => prev.map((f) => (f.id === song.id ? data.song : f)));
+    setFeatBusyId(song.id);
+    try {
+      const res = await fetch(`/api/admin/featured-songs/${song.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: !song.published }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setFeats((prev) => prev.map((f) => (f.id === song.id ? data.song : f)));
+    } finally {
+      setFeatBusyId(null);
+    }
   }
 
   async function deleteFeat(id: string) {
     if (!window.confirm(t('admin.featDeleteConfirm'))) return;
-    const res = await fetch(`/api/admin/featured-songs/${id}`, { method: 'DELETE' });
-    if (!res.ok) return;
-    setFeats((prev) => prev.filter((f) => f.id !== id));
+    setFeatBusyId(id);
+    try {
+      const res = await fetch(`/api/admin/featured-songs/${id}`, { method: 'DELETE' });
+      if (!res.ok) return;
+      setFeats((prev) => prev.filter((f) => f.id !== id));
+    } finally {
+      setFeatBusyId(null);
+    }
   }
 
   if (!authChecked) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-        <p className="muted">{t('admin.checking')}</p>
+      <div className="loader-center" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+        <ClassicLoader />
       </div>
     );
   }
@@ -188,12 +207,14 @@ export function AdminScreen() {
                   onClick={() => setShowPass((s) => !s)}
                   aria-label={showPass ? t('admin.hidePass') : t('admin.showPass')}
                 >
-                  {showPass ? <IconMute size={17} /> : <IconVolume size={17} />}
+                  {showPass ? <IconEyeOff size={17} /> : <IconEye size={17} />}
                 </button>
               </div>
             </div>
             {err && <p style={{ color: '#ef4444', fontSize: 13, margin: 0 }}>{err}</p>}
-            <button className="btn btn-primary btn-block" type="submit">{t('admin.login')}</button>
+            <LoadingButton className="btn btn-primary btn-block" type="submit" loading={loginLoading}>
+              {t('admin.login')}
+            </LoadingButton>
           </form>
         </div>
       </div>
@@ -328,7 +349,7 @@ export function AdminScreen() {
             )}
 
             {featsLoading ? (
-              <p className="muted">{t('admin.uploadingFeat')}</p>
+              <div className="loader-center"><ClassicLoader /></div>
             ) : feats.length === 0 ? (
               <p className="muted">{t('admin.featEmpty')}</p>
             ) : (
@@ -356,16 +377,23 @@ export function AdminScreen() {
                     <span className={`pill ${f.published ? 'pill-ink' : ''}`} style={{ fontSize: 11 }}>
                       {f.published ? t('admin.published') : t('admin.hidden')}
                     </span>
-                    <button
+                    <LoadingButton
                       className="btn btn-ghost btn-sm"
+                      loading={featBusyId === f.id}
                       disabled={f.status !== 'ready'}
                       onClick={() => void toggleFeatPublish(f)}
                     >
                       {f.published ? t('admin.hide') : t('admin.publish')}
-                    </button>
-                    <button className="iconbtn" onClick={() => void deleteFeat(f.id)}>
+                    </LoadingButton>
+                    <LoadingButton
+                      className="iconbtn"
+                      loading={featBusyId === f.id}
+                      loaderSize="sm"
+                      onClick={() => void deleteFeat(f.id)}
+                      aria-label={t('admin.featDeleteConfirm')}
+                    >
                       <IconTrash size={15} />
-                    </button>
+                    </LoadingButton>
                   </div>
                 ))}
               </div>

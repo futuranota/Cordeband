@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
-import { IconArrow, IconVolume, IconMute } from '@/components/ui/icons';
+import { IconArrow, IconEye, IconEyeOff } from '@/components/ui/icons';
+import { LoadingButton } from '@/components/ui/LoadingButton';
 import { createClient } from '@/lib/supabase/client';
 
 export function ResetPasswordForm() {
@@ -112,9 +113,9 @@ export function ResetPasswordForm() {
                 type="button"
                 className="pwtoggle"
                 onClick={() => setShowPass((s) => !s)}
-                aria-label="Mostrar contraseña"
+                aria-label={showPass ? t('auth.hidePass') : t('auth.showPass')}
               >
-                {showPass ? <IconMute size={17} /> : <IconVolume size={17} />}
+                {showPass ? <IconEyeOff size={17} /> : <IconEye size={17} />}
               </button>
             </div>
           </div>
@@ -134,9 +135,9 @@ export function ResetPasswordForm() {
                 type="button"
                 className="pwtoggle"
                 onClick={() => setShowConfirm((s) => !s)}
-                aria-label="Mostrar contraseña"
+                aria-label={showConfirm ? t('auth.hidePass') : t('auth.showPass')}
               >
-                {showConfirm ? <IconMute size={17} /> : <IconVolume size={17} />}
+                {showConfirm ? <IconEyeOff size={17} /> : <IconEye size={17} />}
               </button>
             </div>
           </div>
@@ -149,14 +150,15 @@ export function ResetPasswordForm() {
             <p style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 12 }}>{error}</p>
           )}
 
-          <button
+          <LoadingButton
             type="submit"
             className="btn btn-primary btn-block btn-lg"
-            disabled={!valid || loading}
+            loading={loading}
+            disabled={!valid}
             style={{ marginTop: 8 }}
           >
-            {loading ? '…' : t('auth.resetSubmit')} <IconArrow size={17} />
-          </button>
+            {t('auth.resetSubmit')} <IconArrow size={17} />
+          </LoadingButton>
         </form>
       </div>
     </main>

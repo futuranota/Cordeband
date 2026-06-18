@@ -12,7 +12,6 @@ import {
 import { fetchPublishedCatalogSongs } from '@/lib/supabase/fetch-published-catalog';
 import { includedSongQuota } from '@/lib/plans';
 import { normalizePlan } from '@/lib/supabase/profile';
-import { UpgradeBanner } from '@/components/billing/UpgradeBanner';
 import {
   IconPlus, IconCrown, IconBand, IconUpload, IconCheck,
   IconClock, IconNote, IconSpark, IconPlay,
@@ -259,7 +258,6 @@ export function DashboardScreen() {
   const used = LIBRARY.filter((s) => s.addedThisMonth).length;
   const left = Math.max(0, planLimit - used);
   const pct = planLimit > 0 ? Math.min(100, (used / planLimit) * 100) : 0;
-  const isFree = plan === 'free';
   const isBanda = plan === 'banda';
 
   useEffect(() => {
@@ -280,8 +278,6 @@ export function DashboardScreen() {
 
   return (
     <main className="wrap app-main page">
-      {isFree && <UpgradeBanner />}
-
       <div className="page-head">
         <div>
           <span className="eyebrow">{t('dash.eyebrow')}</span>

@@ -7,6 +7,8 @@ import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
 import { INST_ORDER, INSTRUMENTS, LIBRARY, type InstrumentKey } from '@/lib/data';
 import { IconArrowL, IconBand } from '@/components/ui/icons';
+import { ClassicLoader } from '@/components/ui/ClassicLoader';
+import { LoadingButton } from '@/components/ui/LoadingButton';
 
 type JoinLookup = {
   room: { id: string; code: string; status: string; songId: string | null };
@@ -122,8 +124,8 @@ export function JoinScreen({ token }: JoinScreenProps) {
 
   if (!lookup) {
     return (
-      <div className="wrap page" style={{ paddingTop: 80, textAlign: 'center' }}>
-        <p className="muted">{t('bandJoin.loading')}</p>
+      <div className="wrap page loader-center" style={{ paddingTop: 80 }}>
+        <ClassicLoader />
       </div>
     );
   }
@@ -222,9 +224,9 @@ export function JoinScreen({ token }: JoinScreenProps) {
           <p style={{ color: 'var(--danger, #f87171)', fontSize: 13, marginBottom: 12 }}>{submitError}</p>
         )}
 
-        <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
-          {submitting ? t('bandJoin.loading') : t('room.joinAs')}
-        </button>
+        <LoadingButton type="submit" className="btn btn-primary btn-block" loading={submitting}>
+          {t('room.joinAs')}
+        </LoadingButton>
       </form>
     </div>
   );

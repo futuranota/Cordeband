@@ -4,7 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
-import { IconCheck, IconVolume, IconMute, IconArrow, IconArrowL, IconNote } from '@/components/ui/icons';
+import { IconCheck, IconEye, IconEyeOff, IconArrow, IconArrowL, IconNote } from '@/components/ui/icons';
+import { LoadingButton } from '@/components/ui/LoadingButton';
 import { createClient } from '@/lib/supabase/client';
 import { getProfile, shouldRedirectToProfilePending } from '@/lib/supabase/profile';
 import {
@@ -54,15 +55,21 @@ export function SignupForm({ mode }: { mode: Mode }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [error, setError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
 
-  const valid = (isLogin || name.trim().length > 1) && /\S+@\S+\.\S+/.test(email) && pass.length >= 6;
+  const minPassLen = 6;
+  const passValid = pass.length >= minPassLen;
+  const confirmValid = isLogin || (confirmPass.length >= minPassLen && pass === confirmPass);
+  const valid = (isLogin || name.trim().length > 1) && /\S+@\S+\.\S+/.test(email) && passValid && confirmValid;
   const locationValid = city.trim().length >= 2 && postalCode.trim().length >= 3;
   const aside = planAsideTitle(t, tList, selectedPlan);
   const supabase = createClient();
@@ -86,6 +93,7 @@ export function SignupForm({ mode }: { mode: Mode }) {
 
   async function handleOAuth(provider: 'google') {
     setError('');
+    setOauthLoading(true);
     const origin = window.location.origin;
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
@@ -93,7 +101,10 @@ export function SignupForm({ mode }: { mode: Mode }) {
         redirectTo: `${origin}/auth/callback`,
       },
     });
-    if (oauthError) setError(oauthError.message);
+    if (oauthError) {
+      setError(oauthError.message);
+      setOauthLoading(false);
+    }
   }
 
   async function performSignUp() {
@@ -215,6 +226,10 @@ export function SignupForm({ mode }: { mode: Mode }) {
     }
 
     if (signupStep === 1) {
+      if (!isLogin && pass !== confirmPass) {
+        setError(t('auth.passMismatch'));
+        return;
+      }
       setSignupStep(2);
       setError('');
       return;
@@ -270,15 +285,16 @@ export function SignupForm({ mode }: { mode: Mode }) {
               <p className="lead">{t('auth.locationSub')}</p>
               <p className="muted auth-location-privacy">{t('auth.locationPrivacy')}</p>
 
-              <button
+              <LoadingButton
                 type="button"
                 className="btn btn-ghost btn-block"
-                disabled={geoLoading || loading}
+                loading={geoLoading}
+                disabled={loading}
                 onClick={() => void handleUseLocation()}
                 style={{ marginBottom: 16 }}
               >
-                {geoLoading ? '…' : t('auth.useLocation')}
-              </button>
+                {t('auth.useLocation')}
+              </LoadingButton>
 
               <div className="auth-field">
                 <label className="field-label required">{t('auth.city')}</label>
@@ -358,9 +374,9 @@ export function SignupForm({ mode }: { mode: Mode }) {
                     type="button"
                     className="pwtoggle"
                     onClick={() => setShowPass((s) => !s)}
-                    aria-label="Mostrar contraseña"
+                    aria-label={showPass ? t('auth.hidePass') : t('auth.showPass')}
                   >
-                    {showPass ? <IconMute size={17} /> : <IconVolume size={17} />}
+                    {showPass ? <IconEyeOff size={17} /> : <IconEye size={17} />}
                   </button>
                 </div>
                 {isLogin && (
@@ -369,6 +385,34 @@ export function SignupForm({ mode }: { mode: Mode }) {
                   </Link>
                 )}
               </div>
+
+              {!isLogin && (
+                <div className="auth-field">
+                  <label className="field-label">{t('auth.confirmPass')}</label>
+                  <div className="pwfield">
+                    <input
+                      className="input"
+                      type={showConfirmPass ? 'text' : 'password'}
+                      value={confirmPass}
+                      onChange={(e) => setConfirmPass(e.target.value)}
+                      placeholder={t('auth.confirmPassPh')}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="pwtoggle"
+                      onClick={() => setShowConfirmPass((s) => !s)}
+                      aria-label={showConfirmPass ? t('auth.hidePass') : t('auth.showPass')}
+                    >
+                      {showConfirmPass ? <IconEyeOff size={17} /> : <IconEye size={17} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!isLogin && pass.length >= 1 && confirmPass.length >= 1 && pass !== confirmPass && (
+                <p style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 12 }}>{t('auth.passMismatch')}</p>
+              )}
             </>
           )}
 
@@ -378,37 +422,41 @@ export function SignupForm({ mode }: { mode: Mode }) {
 
           {onLocationStep ? (
             <div className="auth-location-actions">
-              <button
+              <LoadingButton
                 type="submit"
                 className="btn btn-primary btn-block btn-lg"
-                disabled={loading || !locationValid}
+                loading={loading}
+                disabled={!locationValid}
               >
-                {loading ? '…' : submitLabel(t, false, selectedPlan)} <IconArrow size={17} />
-              </button>
+                {submitLabel(t, false, selectedPlan)} <IconArrow size={17} />
+              </LoadingButton>
             </div>
           ) : (
             <>
-              <button
+              <LoadingButton
                 type="submit"
                 className="btn btn-primary btn-block btn-lg"
-                disabled={!valid || loading}
+                loading={loading}
+                disabled={!valid}
                 style={{ marginTop: 8 }}
               >
-                {loading
-                  ? '…'
-                  : isLogin
-                    ? submitLabel(t, true, selectedPlan)
-                    : t('auth.continueSignup')}{' '}
+                {isLogin ? submitLabel(t, true, selectedPlan) : t('auth.continueSignup')}{' '}
                 <IconArrow size={17} />
-              </button>
+              </LoadingButton>
 
               {!isLogin && (
                 <>
                   <div className="auth-sep">{t('auth.or')}</div>
                   <div className="auth-oauth">
-                    <button type="button" className="btn btn-ghost btn-block" onClick={() => handleOAuth('google')}>
+                    <LoadingButton
+                      type="button"
+                      className="btn btn-ghost btn-block"
+                      loading={oauthLoading}
+                      disabled={loading || oauthLoading}
+                      onClick={() => handleOAuth('google')}
+                    >
                       {t('auth.google')}
-                    </button>
+                    </LoadingButton>
                   </div>
                 </>
               )}

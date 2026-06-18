@@ -129,3 +129,10 @@ export function parsePlanParam(raw: string | null | undefined): PlanId {
 export function isPaidPlan(plan: PlanId): plan is Exclude<PlanId, 'free'> {
   return plan === 'pro' || plan === 'banda';
 }
+
+/** User-facing plan label (Pro is shown as Basic in the UI). */
+export function getPlanLabel(plan: PlanId, t: (key: string) => string): string {
+  if (plan === 'pro') return t('common.pro');
+  if (plan === 'banda') return t('common.banda');
+  return t('common.free');
+}
