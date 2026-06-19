@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:processor": "bash services/audio-processor/start-local.sh",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",

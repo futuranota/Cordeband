@@ -410,7 +410,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       setSong(fetched);
       saveActiveSongId(fetched.id);
       const inst = readInstrument();
-      const fetchedScore = await fetchSongScore(fetched.id, inst);
+      const fetchedScore = await fetchSongScore(fetched.id, inst, fetched.bpm || 120);
       if (cancelled) return;
       setScore(fetchedScore);
       setSongLoading(false);
@@ -421,8 +421,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   useEffect(() => {
     if (isDemo || !resolvedSongId || songLoading) return;
-    void fetchSongScore(resolvedSongId, instrument).then(setScore);
-  }, [instrument, isDemo, resolvedSongId, songLoading]);
+    void fetchSongScore(resolvedSongId, instrument, song?.bpm || 120).then(setScore);
+  }, [instrument, isDemo, resolvedSongId, songLoading, song?.bpm]);
 
   useEffect(() => {
     if (!canTogglePlayerMode({ isDemo, plan })) {
@@ -739,14 +739,21 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
     if (useAlphaTab && alphaTex && view !== 'roll') {
       return (
-        <AlphaTabViewer
-          alphaTex={alphaTex}
-          curBeat={curBeatVal}
-          loading={sheetProps.loading}
-          waiting={sheetProps.waiting}
-          waitLabel={sheetProps.waitLabel}
-          fallback={<SheetViewer {...sheetProps} />}
-        />
+        <>
+          <AlphaTabViewer
+            alphaTex={alphaTex}
+            curBeat={curBeatVal}
+            loading={sheetProps.loading}
+            waiting={sheetProps.waiting}
+            waitLabel={sheetProps.waitLabel}
+            fallback={<SheetViewer {...sheetProps} />}
+          />
+          {score.fromDb && (
+            <p className="muted" style={{ fontSize: 12, textAlign: 'center', marginTop: 8 }}>
+              {t('player.scoreApprox')}
+            </p>
+          )}
+        </>
       );
     }
 

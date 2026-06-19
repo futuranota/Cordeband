@@ -1,10 +1,32 @@
-import { runMockUserProcessor } from '@/lib/mock-audio-processor';
+import { runMockFeaturedProcessor, runMockUserProcessor } from '@/lib/mock-audio-processor';
 import { createAdminClient } from '@/lib/supabase/admin';
+
+type DispatchOptions = {
+  featured?: boolean;
+};
+
+/** Node fetch to localhost can fail on IPv6; uvicorn binds 127.0.0.1 by default. */
+function resolveProcessorBaseUrl(raw: string): string {
+  return raw.replace(/\/\/localhost\b/i, '//127.0.0.1').replace(/\/$/, '');
+}
+
+function processorUnreachableMessage(cause: unknown): string {
+  const devHint =
+    process.env.NODE_ENV === 'development'
+      ? ' Arranca el procesador: npm run dev:processor (otra terminal).'
+      : '';
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  if (/fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i.test(detail)) {
+    return `No se pudo conectar al procesador de audio.${devHint}`;
+  }
+  return detail || 'Processor dispatch failed';
+}
 
 export async function dispatchSongProcessing(
   songId: string,
   storagePath: string,
   jobId: string,
+  options: DispatchOptions = {},
 ): Promise<void> {
   const baseUrl = process.env.AUDIO_PROCESSOR_URL?.trim();
   if (baseUrl) {
@@ -16,19 +38,27 @@ export async function dispatchSongProcessing(
       .single();
 
     const apiKey = process.env.AUDIO_PROCESSOR_API_KEY?.trim();
-    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/process`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        song_id: songId,
-        storage_path: storagePath,
-        job_id: jobId,
-        instrument_hint: song?.instruments ?? [],
-      }),
-    });
+    const url = `${resolveProcessorBaseUrl(baseUrl)}/process`;
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          song_id: songId,
+          storage_path: storagePath,
+          job_id: jobId,
+          instrument_hint: song?.instruments ?? [],
+        }),
+      });
+    } catch (err) {
+      throw new Error(processorUnreachableMessage(err));
+    }
+
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(text || `Audio processor HTTP ${res.status}`);
@@ -36,7 +66,8 @@ export async function dispatchSongProcessing(
     return;
   }
 
-  void runMockUserProcessor(songId, jobId).catch(() => {
+  const runMock = options.featured ? runMockFeaturedProcessor : runMockUserProcessor;
+  void runMock(songId, jobId).catch(() => {
     /* errors persisted on job row */
   });
 }

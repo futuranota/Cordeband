@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ADMIN_CATALOG_SELECT, mapCatalogRowToSong } from '@/lib/supabase/catalog-songs';
 import { extFromName, uploadFeaturedFile } from '@/lib/supabase/featured-storage';
-import { runMockFeaturedProcessor } from '@/lib/mock-audio-processor';
+import { dispatchSongProcessing } from '@/lib/audio-processor';
 import { parseInstrumentsFromForm } from '@/lib/parse-instruments';
 import type { CatalogSongRow } from '@/types/catalog';
 
@@ -134,9 +134,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: jobErr?.message ?? 'Job create failed' }, { status: 500 });
   }
 
-  void runMockFeaturedProcessor(songId, job.id).catch(() => {
-    /* errors persisted on job row */
-  });
+  try {
+    await dispatchSongProcessing(songId, audioPath, job.id, { featured: true });
+  } catch (dispatchErr) {
+    const message = dispatchErr instanceof Error ? dispatchErr.message : 'Processor dispatch failed';
+    await admin.from('processing_jobs').update({
+      status: 'failed',
+      error_message: message,
+      completed_at: new Date().toISOString(),
+    }).eq('id', job.id);
+    await admin.from('songs').update({ status: 'failed' }).eq('id', songId);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 
   const { data: refreshed } = await admin
     .from('songs')

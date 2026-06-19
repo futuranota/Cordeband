@@ -7,12 +7,24 @@ export type SongScore = {
   fromDb: boolean;
 };
 
-function asScoreNote(raw: unknown): ScoreNote | null {
+function asScoreNote(raw: unknown, bpm = 120): ScoreNote | null {
   if (!raw || typeof raw !== 'object') return null;
   const n = raw as Record<string, unknown>;
-  const beat = Number(n.beat);
-  const dur = Number(n.dur);
-  const midi = Number(n.midi);
+
+  let beat = Number(n.beat);
+  let dur = Number(n.dur);
+  let midi = Number(n.midi);
+
+  if (!Number.isFinite(beat) && Number.isFinite(n.startTime)) {
+    beat = (Number(n.startTime) * bpm) / 60;
+  }
+  if (!Number.isFinite(dur) && Number.isFinite(n.duration)) {
+    dur = (Number(n.duration) * bpm) / 60;
+  }
+  if (!Number.isFinite(midi) && Number.isFinite(n.pitch)) {
+    midi = Number(n.pitch);
+  }
+
   if (!Number.isFinite(beat) || !Number.isFinite(dur) || !Number.isFinite(midi)) return null;
 
   const tabRaw = n.tab as { string?: number; fret?: number } | undefined;
@@ -25,13 +37,13 @@ function asScoreNote(raw: unknown): ScoreNote | null {
   return { beat, dur, midi, s, tab };
 }
 
-export function buildScoreFromNotes(rawNotes: unknown): SongScore {
+export function buildScoreFromNotes(rawNotes: unknown, bpm = 120): SongScore {
   if (!Array.isArray(rawNotes) || rawNotes.length === 0) {
     return { notes: SCORE.notes, totalBeats: SCORE.totalBeats, fromDb: false };
   }
 
   const notes = rawNotes
-    .map(asScoreNote)
+    .map((n) => asScoreNote(n, bpm))
     .filter((n): n is ScoreNote => n != null)
     .sort((a, b) => a.beat - b.beat);
 
@@ -46,6 +58,7 @@ export function buildScoreFromNotes(rawNotes: unknown): SongScore {
 export async function fetchSongScore(
   songId: string,
   instrument: InstrumentKey,
+  bpm = 120,
 ): Promise<SongScore> {
   const supabase = createClient();
 
@@ -64,5 +77,5 @@ export async function fetchSongScore(
     raw = await loadFor('guitar');
   }
 
-  return buildScoreFromNotes(raw);
+  return buildScoreFromNotes(raw, bpm);
 }
