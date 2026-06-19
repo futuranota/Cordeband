@@ -69,13 +69,7 @@ export function AlphaTabViewer({
         api.tex(alphaTex);
         apiRef.current = api;
         setReady(true);
-        // #region agent log
-        fetch('http://127.0.0.1:7513/ingest/af9b1d32-4cd2-4edf-9e4f-7af87a58ddb5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7dccd2'},body:JSON.stringify({sessionId:'7dccd2',location:'AlphaTabViewer.tsx:71',message:'alphaTab parse ok',data:{texLines:alphaTex.split('\n').length,staffLine:alphaTex.split('\n').find(l=>l.includes('staff'))},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-      } catch (err) {
-        // #region agent log
-        fetch('http://127.0.0.1:7513/ingest/af9b1d32-4cd2-4edf-9e4f-7af87a58ddb5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7dccd2'},body:JSON.stringify({sessionId:'7dccd2',location:'AlphaTabViewer.tsx:76',message:'alphaTab parse failed',data:{error:err instanceof Error?err.message:String(err)},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
+      } catch {
         setFailed(true);
       }
     }).catch(() => setFailed(true));

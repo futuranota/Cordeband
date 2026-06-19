@@ -1,4 +1,5 @@
-import type { InstrumentKey, Song } from '@/lib/data';
+import type { Song } from '@/lib/data';
+import { normalizeInstrumentKeys } from '@/lib/parse-instruments';
 
 export type UserSongRow = {
   id: string;
@@ -14,11 +15,6 @@ export type UserSongRow = {
   added_this_month: boolean;
   created_at: string;
 };
-
-function asInstruments(raw: string[]): InstrumentKey[] {
-  const allowed: InstrumentKey[] = ['guitar', 'piano', 'bass', 'drums', 'vocals', 'other'];
-  return raw.filter((k): k is InstrumentKey => allowed.includes(k as InstrumentKey));
-}
 
 export function formatSongAddedLabel(createdAt: string, locale: 'es' | 'en' = 'es'): string {
   const diffMs = Date.now() - new Date(createdAt).getTime();
@@ -39,7 +35,7 @@ export function mapUserSongRowToSong(row: UserSongRow, locale: 'es' | 'en' = 'es
     title: row.title,
     artist: row.artist,
     glyph: row.glyph,
-    instruments: asInstruments(row.instruments),
+    instruments: normalizeInstrumentKeys(row.instruments),
     duration: row.duration_seconds,
     bpm: row.bpm ?? 0,
     keySig: row.key_signature ?? '',

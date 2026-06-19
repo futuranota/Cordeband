@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/client';
 import { mapCatalogRowToSong, PUBLISHED_CATALOG_SELECT } from '@/lib/supabase/catalog-songs';
 import { mapUserSongRowToSong, type UserSongRow } from '@/lib/supabase/user-songs';
-import type { Song } from '@/lib/data';
+import type { InstrumentKey, Song } from '@/lib/data';
+import { normalizeInstrumentKeys } from '@/lib/parse-instruments';
 import type { CatalogSongRow } from '@/types/catalog';
 
 export const SONG_DETAIL_SELECT = PUBLISHED_CATALOG_SELECT;
@@ -32,6 +33,7 @@ export async function fetchSongById(songId: string): Promise<Song | null> {
 }
 
 export const ACTIVE_SONG_LS = 'cordeband_song_id';
+export const INSTRUMENT_CONFIRMED_LS = 'cordeband_instrument_confirmed_for';
 
 export function readActiveSongId(): string | null {
   if (typeof window === 'undefined') return null;
@@ -41,4 +43,25 @@ export function readActiveSongId(): string | null {
 export function saveActiveSongId(songId: string): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(ACTIVE_SONG_LS, songId);
+}
+
+export function readInstrumentConfirmedFor(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(INSTRUMENT_CONFIRMED_LS);
+}
+
+export function saveInstrumentConfirmedFor(songId: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(INSTRUMENT_CONFIRMED_LS, songId);
+}
+
+export async function fetchStemInstruments(songId: string): Promise<InstrumentKey[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('stems')
+    .select('instrument_type')
+    .eq('song_id', songId);
+
+  if (error || !data?.length) return [];
+  return normalizeInstrumentKeys(data.map((row) => row.instrument_type));
 }

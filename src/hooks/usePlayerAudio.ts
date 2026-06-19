@@ -33,9 +33,6 @@ function secondsToBeats(seconds: number, bpm: number): number {
 
 function safeCloseAudioContext(ctx: AudioContext | null | undefined) {
   if (!ctx || ctx.state === 'closed') return;
-  // #region agent log
-  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7513/ingest/af9b1d32-4cd2-4edf-9e4f-7af87a58ddb5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7dccd2'},body:JSON.stringify({sessionId:'7dccd2',location:'usePlayerAudio.ts:safeClose',message:'closing AudioContext',data:{state:ctx.state},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
   void ctx.close().catch(() => {});
 }
 
@@ -49,7 +46,13 @@ function playbackLimitBeats(
     ? secondsToBeats(durationSeconds, bpm)
     : 0;
   const fromBuffers = maxBufferSeconds > 0 ? secondsToBeats(maxBufferSeconds, bpm) : 0;
-  return Math.max(scoreBeats, fromSong, fromBuffers, 1);
+
+  // Prefer real decoded audio length — score beats in DB can be inflated.
+  if (fromBuffers > 0) {
+    return Math.max(fromBuffers, fromSong > 0 ? Math.min(fromSong, fromBuffers * 1.02) : 0, 1);
+  }
+
+  return Math.max(scoreBeats, fromSong, 1);
 }
 
 export function usePlayerAudio(opts: UsePlayerAudioOptions) {
@@ -100,13 +103,17 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
   }, []);
 
   const applyVols = useCallback(() => {
-    const { instrument, vols } = optsRef.current;
+    const { vols } = optsRef.current;
+    let audible = 0;
     for (const [inst, gain] of gainsRef.current) {
-      if (inst === instrument) {
-        gain.gain.value = 0;
-      } else {
-        const pct = vols[inst] ?? STEM_DEF_VOL[inst] ?? 70;
-        gain.gain.value = Math.max(0, Math.min(1, pct / 100));
+      const pct = vols[inst] ?? STEM_DEF_VOL[inst] ?? 70;
+      const value = Math.max(0, Math.min(1, pct / 100));
+      gain.gain.value = value;
+      if (value > 0) audible += 1;
+    }
+    if (audible === 0 && gainsRef.current.size > 0) {
+      for (const [inst, gain] of gainsRef.current) {
+        gain.gain.value = Math.max(0, Math.min(1, (STEM_DEF_VOL[inst] ?? 70) / 100));
       }
     }
   }, []);
@@ -150,7 +157,9 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
   const play = useCallback(async () => {
     const ctx = ctxRef.current;
     if (!ctx || !audioReady) return;
-    await ctx.resume();
+    if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
+      await ctx.resume();
+    }
     startSources(usePlayerStore.getState().curBeat);
     setPlaying(true);
   }, [audioReady, setPlaying, startSources]);
@@ -159,6 +168,10 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
     if (playing) {
       pause();
     } else {
+      const ctx = ctxRef.current;
+      if (ctx && (ctx.state === 'suspended' || ctx.state === 'interrupted')) {
+        await ctx.resume();
+      }
       await play();
     }
   }, [pause, play, playing]);
@@ -229,6 +242,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
         buffersRef.current.clear();
         gainsRef.current.clear();
         const master = ctx.createGain();
+        master.gain.value = 1;
         master.connect(ctx.destination);
 
         for (const { instrument, buffer } of decoded) {

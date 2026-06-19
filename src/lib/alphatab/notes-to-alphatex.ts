@@ -57,8 +57,21 @@ function isTabInstrument(inst: InstrumentKey): boolean {
   return inst === 'guitar' || inst === 'bass';
 }
 
+/** Guitar tuning high→low — matches \\tuning (E2 A2 D3 G3 B3 E4) string 1-6 */
+const GUITAR_TUNING = [64, 59, 55, 50, 45, 40];
+
 /** Bass tuning high→low (G2 D2 A1 E1) — matches \\tuning (E1 A1 D2 G2) string 1-4 */
 const BASS_TUNING = [43, 38, 33, 28];
+
+function midiToGuitarTab(midi: number): { string: number; fret: number } {
+  let best: { string: number; fret: number } | null = null;
+  for (let s = 0; s < GUITAR_TUNING.length; s++) {
+    const fret = midi - GUITAR_TUNING[s];
+    if (fret < 0 || fret > 24) continue;
+    if (!best || fret < best.fret) best = { string: s, fret };
+  }
+  return best ?? { string: 0, fret: Math.max(0, midi - GUITAR_TUNING[0]) };
+}
 
 function midiToBassTab(midi: number): { string: number; fret: number } {
   let best: { string: number; fret: number } | null = null;
@@ -71,11 +84,11 @@ function midiToBassTab(midi: number): { string: number; fret: number } {
 }
 
 function tabToken(note: ScoreNote, inst: InstrumentKey): string {
-  if (inst === 'bass') {
-    const tab = midiToBassTab(note.midi);
-    return `${tab.string + 1}.${tab.fret}`;
-  }
-  return `${note.tab.string + 1}.${note.tab.fret}`;
+  const tab = inst === 'bass' ? midiToBassTab(note.midi) : midiToGuitarTab(note.midi);
+  const maxString = inst === 'bass' ? 4 : 6;
+  const string = Math.max(1, Math.min(maxString, tab.string + 1));
+  const fret = Math.max(0, Math.min(24, tab.fret));
+  return `${fret}.${string}`;
 }
 
 function isPercussion(inst: InstrumentKey): boolean {
@@ -179,14 +192,5 @@ export function notesToAlphaTex(
     bars.push(`${buildMeasureContent(sorted, instrument, barStart, barEnd)} |`);
   }
 
-  const tex = `${header.join('\n')}\n${bars.join('\n')}`;
-  const tabStrings = sorted.map((n) => {
-    if (instrument === 'guitar') return n.tab.string + 1;
-    if (instrument === 'bass') return midiToBassTab(n.midi).string + 1;
-    return 0;
-  });
-  // #region agent log
-  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7513/ingest/af9b1d32-4cd2-4edf-9e4f-7af87a58ddb5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7dccd2'},body:JSON.stringify({sessionId:'7dccd2',location:'notes-to-alphatex.ts:175',message:'alphaTex generated',data:{instrument,staffLine:header.find(l=>l.includes('staff')),maxTabString:tabStrings.length?Math.max(...tabStrings):0,minTabString:tabStrings.length?Math.min(...tabStrings):0,noteCount:sorted.length},timestamp:Date.now(),hypothesisId:'C',runId:'post-fix'})}).catch(()=>{});
-  // #endregion
-  return tex;
+  return `${header.join('\n')}\n${bars.join('\n')}`;
 }

@@ -1,10 +1,6 @@
-import type { InstrumentKey, Song } from '@/lib/data';
+import type { Song } from '@/lib/data';
 import type { CatalogSongRow } from '@/types/catalog';
-
-function asInstruments(raw: string[]): InstrumentKey[] {
-  const allowed: InstrumentKey[] = ['guitar', 'piano', 'bass', 'drums', 'vocals', 'other'];
-  return raw.filter((k): k is InstrumentKey => allowed.includes(k as InstrumentKey));
-}
+import { normalizeInstrumentKeys } from '@/lib/parse-instruments';
 
 export function mapCatalogRowToSong(row: CatalogSongRow): Song {
   return {
@@ -12,7 +8,7 @@ export function mapCatalogRowToSong(row: CatalogSongRow): Song {
     title: row.title,
     artist: row.artist,
     glyph: row.glyph,
-    instruments: asInstruments(row.instruments),
+    instruments: normalizeInstrumentKeys(row.instruments),
     duration: row.duration_seconds,
     bpm: row.bpm ?? 0,
     keySig: row.key_signature ?? '',

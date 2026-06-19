@@ -9,7 +9,7 @@ import {
   STEMS, LIBRARY, SCORE, fmtTime, getAffiliates, stemTracksFor,
   INSTRUMENTS, type InstrumentKey, type Song, type AffiliateProduct,
 } from '@/lib/data';
-import { fetchSongById, readActiveSongId, saveActiveSongId } from '@/lib/supabase/fetch-song';
+import { fetchSongById, readActiveSongId, readInstrumentConfirmedFor, saveActiveSongId } from '@/lib/supabase/fetch-song';
 import { fetchSongScore, type SongScore } from '@/lib/supabase/fetch-song-score';
 import { DEMO_BAND_MEMBERS } from '@/lib/demo-band';
 import { toUiBandMember, memberDisplayName, viewerMember } from '@/lib/band-room';
@@ -63,11 +63,11 @@ function readInstrument(): InstrumentKey {
   return saved && INSTRUMENTS[saved] ? saved : 'guitar';
 }
 
-function buildDefaultVols(inst: InstrumentKey, stemKeys?: InstrumentKey[]): Record<string, number> {
+function buildDefaultVols(_inst: InstrumentKey, stemKeys?: InstrumentKey[]): Record<string, number> {
   const keys = stemKeys?.length ? stemKeys : STEMS.map((s) => s.key);
   const v: Record<string, number> = {};
   for (const key of keys) {
-    v[key] = key === inst ? 0 : (STEM_DEF_VOL[key] ?? 70);
+    v[key] = STEM_DEF_VOL[key] ?? 70;
   }
   return v;
 }
@@ -189,7 +189,7 @@ function StemMixer({
       <div className="mixer-grid">
         {stems.map((s) => {
           const Icon = s.Icon;
-          const vol = vols[s.key] ?? 0;
+          const vol = vols[s.key] ?? STEM_DEF_VOL[s.key] ?? 70;
           const muted = vol === 0;
           const isYou = s.key === instrument;
           return (
@@ -394,17 +394,31 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const hasRoomSession = !!(bandRoomQueryId || bandRoomQueryCode);
   const [viewMode, setViewMode] = useState<PlayerViewMode>(initialDemoMode);
   const isBandView = resolveBandView({ isDemo, plan, viewMode, roomSession: hasRoomSession });
+  const useDemoTurns = isDemo || isBandView;
   const leaderInstrument: InstrumentKey = 'guitar';
-  const liveBandSession = isBandView && !!user;
+  const liveBandSession = isBandView && !!user && hasRoomSession;
 
   const resolvedSongId = searchParams.get('songId') ?? (isDemo ? DEMO_SONG.id : readActiveSongId());
   const S = song ?? DEMO_SONG;
   const bpm = S.bpm || 84;
   const scoreTotalBeats = isDemo ? SCORE.totalBeats : (score.fromDb ? score.totalBeats : 0);
   const durationBeats = S.duration > 0 ? (S.duration * bpm) / 60 : 0;
-  const fallbackTotal = Math.max(isDemo ? SCORE.totalBeats : scoreTotalBeats, durationBeats, 1);
+  const fallbackTotal = Math.max(
+    isDemo ? SCORE.totalBeats : (durationBeats > 0 ? durationBeats : scoreTotalBeats),
+    1,
+  );
 
-  const useRealAudio = !isDemo && !!resolvedSongId && !isBandView;
+  const bandRoom = useBandRoom({
+    enabled: liveBandSession,
+    userId: user?.id ?? null,
+    instrument: instrument,
+    songId: resolvedSongId,
+    roomId: bandRoomQueryId,
+    roomCode: bandRoomQueryCode,
+  });
+
+  const useLocalBandClock = !liveBandSession || bandRoom.useDemoFallback;
+  const useRealAudio = !isDemo && !!resolvedSongId && (!isBandView || useLocalBandClock);
 
   const audio = usePlayerAudio({
     enabled: useRealAudio,
@@ -440,15 +454,6 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   const useAlphaTab = !isDemo && score.fromDb && !!alphaTex;
 
-  const bandRoom = useBandRoom({
-    enabled: liveBandSession,
-    userId: user?.id ?? null,
-    instrument: instrument,
-    songId: resolvedSongId,
-    roomId: bandRoomQueryId,
-    roomCode: bandRoomQueryCode,
-  });
-
   const bandSync = useBandSync({
     enabled: liveBandSession && bandRoom.isLive,
     room: bandRoom.room,
@@ -456,8 +461,6 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     tempo,
     totalBeats: total,
   });
-
-  const useLocalBandClock = !liveBandSession || bandRoom.useDemoFallback;
 
   useEffect(() => {
     let cancelled = false;
@@ -483,21 +486,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   useEffect(() => {
     if (!useRealAudio || !audio.loadedStems.length) return;
-    setVols((prev) => {
-      const next = { ...prev };
-      for (const key of audio.loadedStems) {
-        if (next[key] === undefined) {
-          next[key] = key === instrument ? 0 : (STEM_DEF_VOL[key] ?? 70);
-        }
-      }
-      if (next[instrument] !== 0) next[instrument] = 0;
-      return next;
-    });
-  }, [useRealAudio, audio.loadedStems, instrument]);
-
-  useEffect(() => {
-    setVols(buildDefaultVols(instrument, displayInstruments));
-  }, [instrument]); // eslint-disable-line react-hooks/exhaustive-deps -- reset mute on instrument change
+    setVols(buildDefaultVols(instrument, audio.loadedStems));
+  }, [useRealAudio, instrument, audio.loadedStems.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isDemo) {
@@ -521,6 +511,10 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       if (cancelled) return;
       if (!fetched) {
         router.replace('/dashboard');
+        return;
+      }
+      if (readInstrumentConfirmedFor() !== resolvedSongId) {
+        router.replace(`/instrument?songId=${encodeURIComponent(resolvedSongId)}`);
         return;
       }
       setSong(fetched);
@@ -554,14 +548,15 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   }, [searchParams, isDemo, plan]);
 
   const yourWindows = useMemo(
-    () => fractionsToBeatWindows(DEMO_YOUR_PART_FRACTIONS, total),
-    [total],
+    () => (useDemoTurns ? fractionsToBeatWindows(DEMO_YOUR_PART_FRACTIONS, total) : []),
+    [total, useDemoTurns],
   );
   const viewerWindows = useMemo(() => {
+    if (!useDemoTurns) return [];
     if (!isBandView) return yourWindows;
     const fractions = DEMO_ENTRY_SCHEDULE_FRACTIONS[instrument] ?? [];
     return fractionsToBeatWindows(fractions, total);
-  }, [isBandView, instrument, total, yourWindows]);
+  }, [useDemoTurns, isBandView, instrument, total, yourWindows]);
   const partWindows = isBandView ? viewerWindows : yourWindows;
   const beatRef = useRef(0);
   const loopRef = useRef(loop);
@@ -644,6 +639,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   const inst = instrument;
   const instName = t(`inst.${inst}`);
+  const ownStemMuted = (vols[inst] ?? 0) <= 0;
   const setVol = (k: string, v: number) => setVols((p) => ({ ...p, [k]: v }));
   const curTime = effectiveCurBeat * 60 / bpm;
   const totalTime = total * 60 / bpm;
@@ -653,7 +649,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const { status, curPart, nextPart } = viewerPartStatus(effectiveCurBeat, partWindows, LEAD_BEATS_DEFAULT);
 
   const secsToEntry = nextPart ? (nextPart.startBeat - effectiveCurBeat) / rate : null;
-  const isWaiting = status !== 'live';
+  const isWaiting = useDemoTurns && status !== 'live';
   const showReadyCue = effectivePlaying && status === 'ready' && secsToEntry != null && secsToEntry <= 4.4;
   const cueNum = showReadyCue ? Math.max(1, Math.ceil(secsToEntry)) : null;
   const justEntered = effectivePlaying && curPart && (effectiveCurBeat - curPart.startBeat) < 0.9;
@@ -813,6 +809,11 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     }
 
     if (useRealAudio) {
+      if (!audio.audioReady && audio.audioError) {
+        setToast(audio.audioError);
+        setTimeout(() => setToast(null), 3200);
+        return;
+      }
       await audio.toggle();
       return;
     }
@@ -1004,8 +1005,10 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                   <div className="np-title">{S.title}</div>
                   <div className="np-meta">
                     <span>{S.artist}</span><span style={{ opacity: 0.4 }}>·</span>
-                    <span className="muted-tag"><span className="dot" />{instName} {t('player.muted')}</span>
-                    <span style={{ opacity: 0.4 }}>·</span>
+                    {ownStemMuted && (
+                      <span className="muted-tag"><span className="dot" />{instName} {t('player.muted')}</span>
+                    )}
+                    {ownStemMuted && <span style={{ opacity: 0.4 }}>·</span>}
                     <span>{S.bpm} BPM · {S.keySig}</span>
                   </div>
                 </div>
@@ -1039,7 +1042,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                   <span className="time">{fmtTime(curTime)}</span>
                   <div className="scrub" ref={scrubRef} onPointerDown={onScrubDown}>
                     <div className="scrub-track">
-                      {viewerWindows.map((p, i) => (
+                      {useDemoTurns && viewerWindows.map((p, i) => (
                         <div key={i} className="scrub-parts" style={{ left: `${p.startBeat / total * 100}%`, width: `${(p.endBeat - p.startBeat) / total * 100}%` }} />
                       ))}
                       {loop && <div className="scrub-loop" style={{ left: `${loop.a / total * 100}%`, width: `${(loop.b - loop.a) / total * 100}%` }} />}
@@ -1096,8 +1099,10 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 <div className="np-title">{S.title}</div>
                 <div className="np-meta">
                   <span>{S.artist}</span><span style={{ opacity: 0.4 }}>·</span>
-                  <span className="muted-tag"><span className="dot" />{instName} {t('player.muted')}</span>
-                  <span style={{ opacity: 0.4 }}>·</span>
+                  {ownStemMuted && (
+                    <span className="muted-tag"><span className="dot" />{instName} {t('player.muted')}</span>
+                  )}
+                  {ownStemMuted && <span style={{ opacity: 0.4 }}>·</span>}
                   <span>{S.bpm} BPM · {S.keySig}</span>
                 </div>
               </div>
@@ -1108,7 +1113,15 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               </div>
             </div>
 
-            <TurnBanner status={status} secsToEntry={secsToEntry} yourTime={yourTime} />
+            {isDemo && (
+              <div className="card" style={{ marginBottom: 12, borderColor: 'var(--line-2)' }}>
+                <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>{t('player.demoNoAudio')}</p>
+              </div>
+            )}
+
+            {useDemoTurns && (
+              <TurnBanner status={status} secsToEntry={secsToEntry} yourTime={yourTime} />
+            )}
 
             {useRealAudio && audio.audioError && (
               <div className="card" style={{ marginBottom: 12, borderColor: 'var(--warn, #e8a838)' }}>
@@ -1132,7 +1145,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 <span className="time">{fmtTime(curTime)}</span>
                 <div className="scrub" ref={scrubRef} onPointerDown={onScrubDown}>
                   <div className="scrub-track">
-                    {yourWindows.map((p, i) => (
+                    {useDemoTurns && yourWindows.map((p, i) => (
                       <div key={i} className="scrub-parts" style={{ left: `${p.startBeat / total * 100}%`, width: `${(p.endBeat - p.startBeat) / total * 100}%` }} />
                     ))}
                     {loop && <div className="scrub-loop" style={{ left: `${loop.a / total * 100}%`, width: `${(loop.b - loop.a) / total * 100}%` }} />}

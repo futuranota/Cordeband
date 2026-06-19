@@ -46,7 +46,34 @@ describe('notesToAlphaTex', () => {
     ];
     const tex = notesToAlphaTex('Test', 120, 'bass', notes)!;
     expect(tex).toContain('\\tuning (E1 A1 D2 G2)');
-    expect(tex).not.toMatch(/\b[5-9]\.\d+/);
-    expect(tex).not.toMatch(/\b6\.\d+/);
+    // AlphaTex tab format is fret.string — string must stay 1-4 for bass
+    expect(tex).not.toMatch(/\.\d*[5-9]\b/);
+    expect(tex).toMatch(/\.\d*[1-4]\b/);
+  });
+
+  it('ignores 1-indexed guitar tab in DB and stays within 1-6', () => {
+    const notes = [
+      { ...sampleNote, midi: 64, tab: { string: 6, fret: 3 } },
+      { ...sampleNote, midi: 59, beat: 1, tab: { string: 5, fret: 0 } },
+    ];
+    const tex = notesToAlphaTex('Test', 120, 'guitar', notes)!;
+    // fret.string — reject string 0 or 7+
+    expect(tex).not.toMatch(/\.\d*0\b/);
+    expect(tex).not.toMatch(/\.\d*[7-9]\b/);
+    expect(tex).toMatch(/\.\d*[1-6]\b/);
+  });
+
+  it('derives guitar tab from midi regardless of stored tab string', () => {
+    const note = { ...sampleNote, midi: 64, tab: { string: 99, fret: 99 } };
+    const tex = notesToAlphaTex('Test', 120, 'guitar', [note])!;
+    expect(tex).not.toMatch(/\.\d*99\b/);
+    expect(tex).toMatch(/\.\d*[1-6]\b/);
+  });
+
+  it('emits AlphaTex fret.string order (not string.fret)', () => {
+    // midi 64 = open high E → string 6 in AlphaTab numbering from our mapper
+    const tex = notesToAlphaTex('Test', 120, 'guitar', [sampleNote])!;
+    expect(tex).toMatch(/\b0\.[1-6]\b/);
+    expect(tex).not.toMatch(/\b[1-6]\.0\b/);
   });
 });

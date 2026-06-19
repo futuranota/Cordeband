@@ -56,6 +56,15 @@ function Dropzone({
         <p className="lead" style={{ margin: '16px auto 0', maxWidth: '50ch' }}>{t('up.sub')}</p>
       </div>
 
+      <div className="card" style={{ marginBottom: 24, padding: 20, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
+        <InstrumentPicker
+          value={instruments}
+          onChange={onInstrumentsChange}
+          disabled={disabled}
+          error={instrumentError}
+        />
+      </div>
+
       <div
         className={`dropzone${drag ? ' drag' : ''}${disabled ? ' disabled' : ''}`}
         onClick={() => !disabled && inputRef.current?.click()}
@@ -91,15 +100,6 @@ function Dropzone({
       {pickError && (
         <p style={{ color: '#ef4444', fontSize: 13, textAlign: 'center', marginTop: 14 }}>{pickError}</p>
       )}
-
-      <div className="card" style={{ marginTop: 24, padding: 20, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
-        <InstrumentPicker
-          value={instruments}
-          onChange={onInstrumentsChange}
-          disabled={disabled}
-          error={instrumentError}
-        />
-      </div>
 
       <div className="suggest">
         <span className="logo-mark" style={{ background: 'var(--elev-3)', color: 'var(--acc)', border: '1px solid var(--line)' }}>
@@ -282,7 +282,7 @@ export function UploadScreen() {
   const [songId, setSongId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [instruments, setInstruments] = useState<InstrumentKey[]>([]);
+  const [instruments, setInstruments] = useState<InstrumentKey[]>(['guitar']);
   const [instrumentError, setInstrumentError] = useState<string | null>(null);
 
   async function startProcess(file: File) {

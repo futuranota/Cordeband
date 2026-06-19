@@ -8,6 +8,7 @@ import { LangToggle } from '@/components/ui/LangToggle';
 import { MobileNavSheet } from './MobileNavSheet';
 import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
+import { readActiveSongId } from '@/lib/supabase/fetch-song';
 import { IconPlus, IconCrown, IconLogout, IconReset } from '@/components/ui/icons';
 
 import { getPlanLabel, type PlanId } from '@/lib/plans';
@@ -37,9 +38,20 @@ export function AppNav({ user, plan, isAdmin = false }: { user: User; plan: Plan
     router.refresh();
   }
 
+  const [practiceHref, setPracticeHref] = useState('/instrument');
+
+  useEffect(() => {
+    const activeSongId = readActiveSongId();
+    setPracticeHref(
+      activeSongId
+        ? `/instrument?songId=${encodeURIComponent(activeSongId)}`
+        : '/instrument',
+    );
+  }, []);
+
   const links = [
     { href: '/dashboard', label: t('nav.library') },
-    { href: '/instrument', label: t('nav.practice') },
+    { href: practiceHref, label: t('nav.practice') },
     ...(plan === 'banda' ? [{ href: '/band', label: t('nav.band') }] : []),
     { href: '/upload', label: t('nav.add') },
     { href: '/profile', label: t('nav.subscription') },

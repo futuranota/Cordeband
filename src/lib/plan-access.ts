@@ -18,7 +18,7 @@ export function defaultPlayerMode(opts: {
   if (opts.isDemo) {
     return opts.urlDemo === 'banda' ? 'banda' : 'solo';
   }
-  if (opts.plan === 'banda') return 'banda';
+  // Logged-in practice always starts in solo (real stems); band view is opt-in.
   return 'solo';
 }
 

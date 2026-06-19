@@ -1,11 +1,16 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { INST_ORDER, INSTRUMENTS, LIBRARY, type InstrumentKey } from '@/lib/data';
-import { fetchSongById, saveActiveSongId } from '@/lib/supabase/fetch-song';
+import {
+  fetchSongById,
+  fetchStemInstruments,
+  saveActiveSongId,
+  saveInstrumentConfirmedFor,
+} from '@/lib/supabase/fetch-song';
 import type { Song } from '@/lib/data';
 import { StagePanel } from '@/components/player/StagePanel';
 import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
@@ -23,15 +28,24 @@ function InstrumentScreenInner() {
   const songId = searchParams.get('songId');
 
   const [song, setSong] = useState<Song | null>(null);
+  const [stemInstruments, setStemInstruments] = useState<InstrumentKey[]>([]);
   const [loading, setLoading] = useState(!!songId);
   const [error, setError] = useState<string | null>(null);
   const [detectionMode, setDetectionMode] = useState<InstrumentDetectionMode>('manual');
 
   const activeSong = song ?? (songId ? null : DEMO_SONG);
-  const available = new Set(activeSong?.instruments ?? []);
+  const playableInstruments = useMemo(() => {
+    const fromSong = activeSong?.instruments ?? [];
+    if (fromSong.length) return fromSong;
+    return stemInstruments;
+  }, [activeSong?.instruments, stemInstruments]);
+
+  const available = useMemo(() => new Set(playableInstruments), [playableInstruments]);
   const [sel, setSel] = useState<InstrumentKey | null>(null);
   const bannerKeys = instrumentBannerKeys(detectionMode);
   const isManual = detectionMode === 'manual';
+  const ready = !song?.status || song.status === 'ready';
+  const canEnter = !!sel && ready && available.has(sel);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +63,7 @@ function InstrumentScreenInner() {
   useEffect(() => {
     if (!songId) {
       setSong(null);
+      setStemInstruments([]);
       setLoading(false);
       setError(null);
       return;
@@ -63,6 +78,7 @@ function InstrumentScreenInner() {
       if (!fetched) {
         setError(t('sel.songNotFound'));
         setSong(null);
+        setStemInstruments([]);
       } else if (fetched.status && fetched.status !== 'ready') {
         setError(t('sel.songProcessing'));
         setSong(fetched);
@@ -77,15 +93,56 @@ function InstrumentScreenInner() {
   }, [songId, t]);
 
   useEffect(() => {
-    if (!activeSong) return;
-    const insts = new Set(activeSong.instruments);
-    setSel(insts.has('guitar') ? 'guitar' : activeSong.instruments[0] ?? null);
-  }, [activeSong?.id, activeSong?.instruments.join(',')]);
+    if (!songId || !song || song.status === 'ready') return;
+
+    let cancelled = false;
+    const poll = window.setInterval(() => {
+      void fetchSongById(songId).then((fetched) => {
+        if (cancelled || !fetched) return;
+        setSong(fetched);
+        if (fetched.status === 'ready') {
+          setError(null);
+          saveActiveSongId(fetched.id);
+        }
+      });
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+    };
+  }, [songId, song?.status]);
+
+  useEffect(() => {
+    if (!songId || (song?.instruments.length ?? 0) > 0) return;
+
+    let cancelled = false;
+    void fetchStemInstruments(songId).then((stems) => {
+      if (!cancelled) setStemInstruments(stems);
+    });
+
+    return () => { cancelled = true; };
+  }, [songId, song?.instruments.length, song?.status]);
+
+  useEffect(() => {
+    if (!playableInstruments.length) {
+      setSel(null);
+      return;
+    }
+    const insts = new Set(playableInstruments);
+    setSel((prev) => {
+      if (prev && insts.has(prev)) return prev;
+      return insts.has('guitar') ? 'guitar' : playableInstruments[0];
+    });
+  }, [activeSong?.id, playableInstruments.join(',')]);
 
   function chooseInstrument(key: InstrumentKey) {
     localStorage.setItem('cordeband_instrument', key);
     const id = songId ?? activeSong?.id;
-    if (id) saveActiveSongId(id);
+    if (id) {
+      saveActiveSongId(id);
+      saveInstrumentConfirmedFor(id);
+    }
     const qs = id ? `?songId=${encodeURIComponent(id)}` : '';
     router.push(`/player${qs}`);
   }
@@ -98,7 +155,7 @@ function InstrumentScreenInner() {
     );
   }
 
-  if (error && !activeSong?.instruments.length) {
+  if (error && !playableInstruments.length) {
     return (
       <main className="wrap app-main page" style={{ textAlign: 'center', paddingTop: 60 }}>
         <h2 className="h2">{error}</h2>
@@ -108,8 +165,6 @@ function InstrumentScreenInner() {
       </main>
     );
   }
-
-  const ready = !song?.status || song.status === 'ready';
 
   return (
     <main className="wrap app-main page" style={{ maxWidth: 900 }}>
@@ -126,20 +181,23 @@ function InstrumentScreenInner() {
         {error && (
           <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>{error}</p>
         )}
+        {!ready && playableInstruments.length > 0 && (
+          <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>{t('sel.songProcessing')}</p>
+        )}
       </div>
 
       <div style={{ marginTop: 36 }}>
         <StagePanel
-          instruments={activeSong?.instruments ?? []}
+          instruments={playableInstruments}
           youKey={sel}
           title={t('sel.stageTitle')}
           sub={t('sel.stageSub')}
         />
       </div>
 
-      {(activeSong?.instruments?.length ?? 0) > 0 && activeSong && (
+      {playableInstruments.length > 0 && activeSong && (
         <DetectedInstrumentsBanner
-          instruments={activeSong.instruments}
+          instruments={playableInstruments}
           titleKey={instrumentSelectorBannerKey(detectionMode)}
           subKey={bannerKeys.subKey}
         />
@@ -177,7 +235,7 @@ function InstrumentScreenInner() {
         <button
           type="button"
           className="btn btn-primary btn-lg"
-          disabled={!sel || !ready}
+          disabled={!canEnter}
           onClick={() => sel && chooseInstrument(sel)}
         >
           {t('sel.enter')} <IconArrow size={17} />

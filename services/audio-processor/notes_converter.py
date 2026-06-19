@@ -10,19 +10,28 @@ def _staff_pos(midi: int) -> int:
 
 
 TUNING = [64, 59, 55, 50, 45, 40]
+BASS_TUNING = [43, 38, 33, 28]  # E A D G (4-string bass)
 
 
-def _midi_to_tab(midi: int) -> dict[str, int]:
+def _midi_to_tab(midi: int, tuning: list[int]) -> dict[str, int]:
     best: tuple[int, int] | None = None
-    for s, open_midi in enumerate(TUNING):
+    for s, open_midi in enumerate(tuning):
         fret = midi - open_midi
         if fret < 0 or fret > 15:
             continue
         if best is None or fret < best[1]:
             best = (s, fret)
     if best is None:
-        return {"string": 0, "fret": max(0, midi - 64)}
+        return {"string": 0, "fret": max(0, midi - tuning[0])}
     return {"string": best[0], "fret": best[1]}
+
+
+def _midi_to_guitar_tab(midi: int) -> dict[str, int]:
+    return _midi_to_tab(midi, TUNING)
+
+
+def _midi_to_bass_tab(midi: int) -> dict[str, int]:
+    return _midi_to_tab(midi, BASS_TUNING)
 
 
 def basic_pitch_events_to_score_notes(
@@ -54,8 +63,10 @@ def basic_pitch_events_to_score_notes(
             "midi": midi,
             "s": _staff_pos(midi),
         }
-        if instrument in ("guitar", "bass"):
-            note["tab"] = _midi_to_tab(midi)
+        if instrument == "guitar":
+            note["tab"] = _midi_to_guitar_tab(midi)
+        elif instrument == "bass":
+            note["tab"] = _midi_to_bass_tab(midi)
         notes.append(note)
     notes.sort(key=lambda n: n["beat"])
     return notes
