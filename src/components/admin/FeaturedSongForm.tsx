@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/i18n/context';
+import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
+import { InstrumentPicker } from '@/components/instruments/InstrumentPicker';
 import type { Song } from '@/lib/data';
+import type { InstrumentKey } from '@/lib/data';
+import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
+import { instrumentBannerKeys } from '@/lib/instrument-detection';
 import { IconCheck, IconSpin, IconWave } from '@/components/ui/icons';
 import { LoadingButton } from '@/components/ui/LoadingButton';
 
@@ -10,6 +15,11 @@ type Props = {
   onSaved: (song: Song) => void;
   onCancel: () => void;
 };
+
+function parseInstruments(raw: unknown): InstrumentKey[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((k): k is InstrumentKey => typeof k === 'string');
+}
 
 function JobProgress({ fileName, songId, onDone, onFailed }: {
   fileName: string;
@@ -19,6 +29,11 @@ function JobProgress({ fileName, songId, onDone, onFailed }: {
 }) {
   const { t } = useT();
   const [pct, setPct] = useState(5);
+  const [finished, setFinished] = useState(false);
+  const [detected, setDetected] = useState<InstrumentKey[]>([]);
+  const [savedSong, setSavedSong] = useState<Song | null>(null);
+  const [detectionMode, setDetectionMode] = useState<InstrumentDetectionMode>('manual');
+  const bannerKeys = instrumentBannerKeys(detectionMode);
 
   const PROC_STEPS = [
     { label: t('up.p1t'), sub: t('up.p1b') },
@@ -37,6 +52,9 @@ function JobProgress({ fileName, songId, onDone, onFailed }: {
           if (!res.ok) throw new Error('Job poll failed');
           const data = await res.json();
           if (data.job?.progress_pct != null) setPct(data.job.progress_pct);
+          if (data.detectionMode === 'auto' || data.detectionMode === 'manual') {
+            setDetectionMode(data.detectionMode);
+          }
 
           if (data.job?.status === 'failed') {
             onFailed(data.job.error_message ?? t('admin.featUploadError'));
@@ -44,10 +62,15 @@ function JobProgress({ fileName, songId, onDone, onFailed }: {
           }
 
           if (data.songStatus === 'ready' || data.job?.status === 'completed') {
+            setPct(100);
+            setDetected(parseInstruments(data.instruments));
             const listRes = await fetch('/api/admin/featured-songs');
             const listData = await listRes.json();
             const song = (listData.songs as Song[] | undefined)?.find((s) => s.id === songId);
-            if (song) onDone(song);
+            if (song) {
+              setSavedSong(song);
+              setFinished(true);
+            }
             return;
           }
         } catch {
@@ -72,26 +95,47 @@ function JobProgress({ fileName, songId, onDone, onFailed }: {
         </span>
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>{fileName}</div>
-          <div className="muted" style={{ fontSize: 13 }}>{t('admin.uploadingFeat')}</div>
+          <div className="muted" style={{ fontSize: 13 }}>
+            {finished ? t('up.p4t') : t('admin.uploadingFeat')}
+          </div>
         </div>
       </div>
       <div className="proc-progress"><i style={{ width: `${pct}%` }} /></div>
-      <div className="proc-steps">
-        {PROC_STEPS.map((s, i) => {
-          const state = i < activeStep ? 'done' : i === activeStep ? 'active' : 'pending';
-          return (
-            <div key={i} className={`proc-step ${state}`}>
-              <span className="proc-dot">
-                {state === 'done' ? <IconCheck size={13} sw={2.5} /> : state === 'active' ? <IconSpin size={14} className="spin" /> : i + 1}
-              </span>
-              <div>
-                <div className="pl">{s.label}</div>
-                <div className="ps">{s.sub}</div>
+      {!finished ? (
+        <div className="proc-steps">
+          {PROC_STEPS.map((s, i) => {
+            const state = i < activeStep ? 'done' : i === activeStep ? 'active' : 'pending';
+            return (
+              <div key={i} className={`proc-step ${state}`}>
+                <span className="proc-dot">
+                  {state === 'done' ? <IconCheck size={13} sw={2.5} /> : state === 'active' ? <IconSpin size={14} className="spin" /> : i + 1}
+                </span>
+                <div>
+                  <div className="pl">{s.label}</div>
+                  <div className="ps">{s.sub}</div>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <DetectedInstrumentsBanner
+            instruments={detected}
+            titleKey={bannerKeys.titleKey}
+            subKey={bannerKeys.subKey}
+          />
+          <div className="row" style={{ marginTop: 20 }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => savedSong && onDone(savedSong)}
+            >
+              {t('admin.featProcessSave')}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -111,6 +155,7 @@ export function FeaturedSongForm({ onSaved, onCancel }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [processingSongId, setProcessingSongId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [instruments, setInstruments] = useState<InstrumentKey[]>([]);
 
   useEffect(() => {
     if (!coverFile) {
@@ -128,6 +173,10 @@ export function FeaturedSongForm({ onSaved, onCancel }: Props) {
       setError(t('admin.featFormRequired'));
       return;
     }
+    if (!instruments.length) {
+      setError(t('admin.featInstrumentsRequired'));
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -138,6 +187,7 @@ export function FeaturedSongForm({ onSaved, onCancel }: Props) {
     form.set('description', description.trim());
     form.set('isAiGenerated', String(isAiGenerated));
     form.set('audio', audioFile);
+    for (const inst of instruments) form.append('instruments', inst);
     if (coverFile) form.set('cover', coverFile);
 
     try {
@@ -227,6 +277,13 @@ export function FeaturedSongForm({ onSaved, onCancel }: Props) {
             {t('admin.featAiGenerated')}
           </label>
         </div>
+        <InstrumentPicker
+          value={instruments}
+          onChange={setInstruments}
+          disabled={submitting}
+          labelKey="up.instrumentsLabel"
+          hintKey="up.instrumentsHint"
+        />
       </div>
       {error && <p style={{ color: '#ef4444', fontSize: 13, margin: '14px 0 0' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>

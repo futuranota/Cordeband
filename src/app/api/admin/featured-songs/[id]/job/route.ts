@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth-server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getInstrumentDetectionMode } from '@/lib/instrument-detection';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -25,9 +26,14 @@ export async function GET(_request: Request, { params }: Params) {
 
   const { data: song } = await admin
     .from('songs')
-    .select('status')
+    .select('status, instruments')
     .eq('id', songId)
     .single();
 
-  return NextResponse.json({ job, songStatus: song?.status ?? null });
+  return NextResponse.json({
+    job,
+    songStatus: song?.status ?? null,
+    instruments: song?.instruments ?? [],
+    detectionMode: getInstrumentDetectionMode(),
+  });
 }

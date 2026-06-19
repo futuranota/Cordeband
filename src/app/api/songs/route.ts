@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isAdminUser } from '@/lib/admin-auth';
 import { dispatchSongProcessing } from '@/lib/audio-processor';
 import { includedSongQuota } from '@/lib/plans';
+import { parseInstrumentsFromForm } from '@/lib/parse-instruments';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getProfile, normalizePlan } from '@/lib/supabase/profile';
 import { createClient } from '@/lib/supabase/server';
@@ -81,6 +82,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unsupported audio format' }, { status: 400 });
   }
 
+  const instruments = parseInstrumentsFromForm(form);
+  if (instruments === null) {
+    return NextResponse.json({ error: 'Invalid instruments selection' }, { status: 400 });
+  }
+  if (!instruments.length) {
+    return NextResponse.json({ error: 'At least one instrument is required' }, { status: 400 });
+  }
+
   const profile = await getProfile(supabase, user.id);
   const plan = normalizePlan(profile?.plan);
   const isAdmin = isAdminUser(user.id);
@@ -119,6 +128,7 @@ export async function POST(request: Request) {
       is_public: false,
       stems_expires_at: null,
       added_this_month: false,
+      instruments,
     })
     .select(USER_SONG_SELECT)
     .single();

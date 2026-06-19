@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { beatToTickPosition } from '@/lib/alphatab/notes-to-alphatex';
+import { DARK_ALPHATAB_RESOURCES } from '@/lib/alphatab/dark-theme-resources';
 import { IconSpark } from '@/components/ui/icons';
 
 const FONT_CDN = 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.8.3/dist/font/';
@@ -61,6 +62,7 @@ export function AlphaTabViewer({
           display: {
             scale: 0.9,
             layoutMode: 'page',
+            resources: DARK_ALPHATAB_RESOURCES,
           },
         }) as AlphaTabApi;
 

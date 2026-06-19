@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ADMIN_CATALOG_SELECT, mapCatalogRowToSong } from '@/lib/supabase/catalog-songs';
 import { extFromName, uploadFeaturedFile } from '@/lib/supabase/featured-storage';
 import { runMockFeaturedProcessor } from '@/lib/mock-audio-processor';
+import { parseInstrumentsFromForm } from '@/lib/parse-instruments';
 import type { CatalogSongRow } from '@/types/catalog';
 
 const AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/x-flac'];
@@ -64,6 +65,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unsupported cover image' }, { status: 400 });
   }
 
+  const instruments = parseInstrumentsFromForm(form);
+  if (instruments === null) {
+    return NextResponse.json({ error: 'Invalid instruments selection' }, { status: 400 });
+  }
+  if (!instruments.length) {
+    return NextResponse.json({ error: 'At least one instrument is required' }, { status: 400 });
+  }
+
   const admin = createAdminClient();
 
   const { data: song, error: insertErr } = await admin
@@ -80,6 +89,7 @@ export async function POST(request: Request) {
       is_public: false,
       user_id: null,
       stems_expires_at: null,
+      instruments,
     })
     .select(ADMIN_CATALOG_SELECT)
     .single();

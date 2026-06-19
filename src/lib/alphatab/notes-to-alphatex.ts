@@ -13,6 +13,21 @@ const INST_PROGRAM: Record<InstrumentKey, number> = {
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+/** General MIDI percussion map → alphaTex articulation identifiers */
+const GM_PERCUSSION: Record<number, string> = {
+  35: 'KickHit',
+  36: 'KickHit',
+  38: 'SnareHit',
+  40: 'SnareHit',
+  42: 'HiHatClosed',
+  44: 'HiHatHalf',
+  46: 'HiHatOpen',
+  49: 'CrashMediumHit',
+  51: 'RideMiddle',
+  53: 'RideBell',
+  57: 'CrashHighHit',
+};
+
 function escapeTex(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
@@ -20,6 +35,14 @@ function escapeTex(value: string): string {
 function midiToNoteName(midi: number): string {
   const octave = Math.floor(midi / 12) - 1;
   return `${NOTE_NAMES[midi % 12]}${octave}`;
+}
+
+function midiToPercussion(midi: number): string {
+  if (GM_PERCUSSION[midi]) return GM_PERCUSSION[midi];
+  if (midi < 45) return 'KickHit';
+  if (midi < 55) return 'SnareHit';
+  if (midi < 65) return 'HiHatClosed';
+  return 'RideMiddle';
 }
 
 function durToToken(dur: number): string {
@@ -34,9 +57,16 @@ function isTabInstrument(inst: InstrumentKey): boolean {
   return inst === 'guitar' || inst === 'bass';
 }
 
+function isPercussion(inst: InstrumentKey): boolean {
+  return inst === 'drums';
+}
+
 function noteToken(note: ScoreNote, inst: InstrumentKey): string {
   if (isTabInstrument(inst)) {
     return `${note.tab.string + 1}.${note.tab.fret}`;
+  }
+  if (isPercussion(inst)) {
+    return midiToPercussion(note.midi);
   }
   return midiToNoteName(note.midi);
 }
@@ -69,6 +99,22 @@ function buildMeasureContent(
   return parts.join(' ');
 }
 
+function buildTrackHeader(instrument: InstrumentKey): string[] {
+  const trackName = escapeTex(instrument);
+  if (isPercussion(instrument)) {
+    return [
+      `\\track "${trackName}"`,
+      '\\instrument percussion',
+      '\\clef neutral',
+      '\\articulation defaults',
+    ];
+  }
+  return [
+    `\\track "${trackName}"`,
+    `\\instrument ${INST_PROGRAM[instrument]}`,
+  ];
+}
+
 export function beatToTickPosition(beat: number): number {
   return Math.round(beat * TICKS_PER_QUARTER);
 }
@@ -89,8 +135,7 @@ export function notesToAlphaTex(
     `\\title "${escapeTex(title)}"`,
     `\\tempo ${Math.round(bpm)}`,
     '\\ts common',
-    '.',
-    `\\track "${instrument}" instrument ${INST_PROGRAM[instrument]}`,
+    ...buildTrackHeader(instrument),
   ];
 
   if (isTabInstrument(instrument)) {

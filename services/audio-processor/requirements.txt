@@ -1,0 +1,9 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+demucs==4.0.1
+torch==2.5.1
+torchaudio==2.5.1
+supabase==2.11.0
+httpx==0.28.1
+numpy==2.2.1
+soundfile==0.12.1

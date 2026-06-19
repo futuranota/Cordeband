@@ -1,11 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createSilentWavBuffer } from '@/lib/audio/wav-placeholder';
 import { CATALOG_INSTRUMENTS } from '@/types/catalog';
-import { SCORE } from '@/lib/data';
+import { SCORE, type InstrumentKey } from '@/lib/data';
 import { uploadStemWav, userStemPath } from '@/lib/supabase/user-song-storage';
 
 const STEMS_TTL_MS = 48 * 60 * 60 * 1000;
 const PLACEHOLDER_WAV_SECS = 30;
+const CATALOG_SET = new Set<string>(CATALOG_INSTRUMENTS);
 
 function buildNotesForInstrument(instrument: string) {
   const notes = SCORE.notes.slice(0, 32).map((n) => ({
@@ -23,6 +24,17 @@ const STEP_PROGRESS = [15, 45, 75, 95];
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveInstrumentsToProcess(raw: unknown): InstrumentKey[] {
+  if (!Array.isArray(raw)) return [...CATALOG_INSTRUMENTS];
+  const unique: InstrumentKey[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string' || !CATALOG_SET.has(item)) continue;
+    const key = item as InstrumentKey;
+    if (!unique.includes(key)) unique.push(key);
+  }
+  return unique.length ? unique : [...CATALOG_INSTRUMENTS];
 }
 
 type MockProcessorOptions = {
@@ -55,6 +67,16 @@ async function runMockProcessor(
 
     await admin.from('songs').update({ status: 'processing' }).eq('id', songId);
 
+    const { data: songRow, error: songErr } = await admin
+      .from('songs')
+      .select('instruments')
+      .eq('id', songId)
+      .single();
+
+    if (songErr) throw songErr;
+
+    const toProcess = resolveInstrumentsToProcess(songRow?.instruments);
+
     for (let i = 0; i < STEP_DELAYS_MS.length; i++) {
       await sleep(STEP_DELAYS_MS[i]);
       await admin.from('processing_jobs').update({
@@ -66,44 +88,54 @@ async function runMockProcessor(
     const mockKeys = ['Do mayor', 'La menor', 'Mi mayor', 'Re menor', 'Sol mayor'];
     const keySig = mockKeys[Math.floor(Math.random() * mockKeys.length)];
     const placeholderWav = createSilentWavBuffer(PLACEHOLDER_WAV_SECS);
+    const detected: InstrumentKey[] = [];
 
-    for (const instrument of CATALOG_INSTRUMENTS) {
+    for (const instrument of toProcess) {
       const storagePath = options.stemPath(songId, instrument);
-      await uploadStemWav(storagePath, placeholderWav);
+      try {
+        await uploadStemWav(storagePath, placeholderWav);
 
-      const { data: stem, error: stemErr } = await admin
-        .from('stems')
-        .insert({
+        const { data: stem, error: stemErr } = await admin
+          .from('stems')
+          .insert({
+            song_id: songId,
+            instrument_type: instrument,
+            storage_url: null,
+            storage_path: storagePath,
+          })
+          .select('id')
+          .single();
+
+        if (stemErr) throw stemErr;
+
+        const notes = buildNotesForInstrument(instrument);
+        const { error: noteErr } = await admin.from('note_sequences').insert({
           song_id: songId,
+          stem_id: stem.id,
           instrument_type: instrument,
-          storage_url: null,
-          storage_path: storagePath,
-        })
-        .select('id')
-        .single();
+          notes,
+          tab_data: instrument === 'guitar' || instrument === 'bass'
+            ? notes.map((n) => n.tab).filter(Boolean)
+            : null,
+          key_signature: keySig,
+        });
 
-      if (stemErr) throw stemErr;
+        if (noteErr) throw noteErr;
+        detected.push(instrument);
+      } catch {
+        /* skip instruments that failed to upload */
+      }
+    }
 
-      const notes = buildNotesForInstrument(instrument);
-      const { error: noteErr } = await admin.from('note_sequences').insert({
-        song_id: songId,
-        stem_id: stem.id,
-        instrument_type: instrument,
-        notes,
-        tab_data: instrument === 'guitar' || instrument === 'bass'
-          ? notes.map((n) => n.tab).filter(Boolean)
-          : null,
-        key_signature: keySig,
-      });
-
-      if (noteErr) throw noteErr;
+    if (!detected.length) {
+      throw new Error('No stems could be uploaded to storage — check the stems bucket');
     }
 
     await admin.from('songs').update({
       status: 'ready',
       bpm: mockBpm,
       key_signature: keySig,
-      instruments: CATALOG_INSTRUMENTS,
+      instruments: detected,
       duration_seconds: 210,
       stems_expires_at: options.stemsExpiresAt,
     }).eq('id', songId);

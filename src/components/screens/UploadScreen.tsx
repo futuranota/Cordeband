@@ -1,17 +1,34 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
-import { IconUpload, IconCheck, IconSpin, IconCart, IconExternal, IconWave } from '@/components/ui/icons';
+import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
+import { InstrumentPicker } from '@/components/instruments/InstrumentPicker';
+import type { InstrumentKey } from '@/lib/data';
+import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
+import { instrumentBannerKeys } from '@/lib/instrument-detection';
+import { IconUpload, IconCheck, IconSpin, IconCart, IconExternal, IconWave, IconArrow } from '@/components/ui/icons';
 
 type Stage = 'idle' | 'uploading' | 'error';
 
 const AUDIO_ACCEPT = '.mp3,.wav,.flac,audio/*';
 const MAX_BYTES = 52_428_800;
 
-function Dropzone({ onPick, disabled }: { onPick: (file: File) => void; disabled?: boolean }) {
+function Dropzone({
+  onPick,
+  disabled,
+  instruments,
+  onInstrumentsChange,
+  instrumentError,
+}: {
+  onPick: (file: File) => void;
+  disabled?: boolean;
+  instruments: InstrumentKey[];
+  onInstrumentsChange: (next: InstrumentKey[]) => void;
+  instrumentError: string | null;
+}) {
   const { t } = useT();
   const [drag, setDrag] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
@@ -75,6 +92,15 @@ function Dropzone({ onPick, disabled }: { onPick: (file: File) => void; disabled
         <p style={{ color: '#ef4444', fontSize: 13, textAlign: 'center', marginTop: 14 }}>{pickError}</p>
       )}
 
+      <div className="card" style={{ marginTop: 24, padding: 20, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
+        <InstrumentPicker
+          value={instruments}
+          onChange={onInstrumentsChange}
+          disabled={disabled}
+          error={instrumentError}
+        />
+      </div>
+
       <div className="suggest">
         <span className="logo-mark" style={{ background: 'var(--elev-3)', color: 'var(--acc)', border: '1px solid var(--line)' }}>
           <IconCart size={16} />
@@ -87,6 +113,11 @@ function Dropzone({ onPick, disabled }: { onPick: (file: File) => void; disabled
       </div>
     </div>
   );
+}
+
+function parseInstruments(raw: unknown): InstrumentKey[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((k): k is InstrumentKey => typeof k === 'string');
 }
 
 function ProcessingStatus({
@@ -104,6 +135,10 @@ function ProcessingStatus({
 }) {
   const { t } = useT();
   const [pct, setPct] = useState(5);
+  const [finished, setFinished] = useState(false);
+  const [detected, setDetected] = useState<InstrumentKey[]>([]);
+  const [detectionMode, setDetectionMode] = useState<InstrumentDetectionMode>('manual');
+  const bannerKeys = instrumentBannerKeys(detectionMode);
 
   const PROC_STEPS = [
     { label: t('up.p1t'), sub: t('up.p1b') },
@@ -118,6 +153,9 @@ function ProcessingStatus({
     const data = await res.json();
 
     if (data.job?.progress_pct != null) setPct(data.job.progress_pct);
+    if (data.detectionMode === 'auto' || data.detectionMode === 'manual') {
+      setDetectionMode(data.detectionMode);
+    }
 
     if (data.job?.status === 'failed') {
       onFailed(data.job.error_message ?? t('up.errB'));
@@ -126,12 +164,13 @@ function ProcessingStatus({
 
     if (data.songStatus === 'ready' || data.job?.status === 'completed') {
       setPct(100);
-      setTimeout(onDone, 650);
+      setDetected(parseInstruments(data.instruments));
+      setFinished(true);
       return true;
     }
 
     return false;
-  }, [songId, onDone, onFailed, t]);
+  }, [songId, onFailed, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,29 +218,50 @@ function ProcessingStatus({
             <span className="logo-mark" style={{ width: 42, height: 42, borderRadius: 10 }}><IconWave size={20} /></span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{fileName}</div>
-              <div className="muted" style={{ fontSize: 13 }}>{t('up.uploading')}</div>
+              <div className="muted" style={{ fontSize: 13 }}>
+                {finished ? t('up.p4t') : t('up.uploading')}
+              </div>
             </div>
           </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>{t('up.cancel')}</button>
+          {!finished && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>{t('up.cancel')}</button>
+          )}
         </div>
         <div className="proc-progress"><i style={{ width: `${pct}%` }} /></div>
-        <div className="proc-steps">
-          {PROC_STEPS.map((s, i) => {
-            const state = i < activeStep ? 'done' : i === activeStep ? 'active' : 'pending';
-            return (
-              <div key={i} className={`proc-step ${state}`}>
-                <span className="proc-dot">
-                  {state === 'done' ? <IconCheck size={13} sw={2.5} /> : state === 'active' ? <IconSpin size={14} className="spin" /> : i + 1}
-                </span>
-                <div>
-                  <div className="pl">{s.label}</div>
-                  <div className="ps">{s.sub}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <p className="muted" style={{ fontSize: 13, marginTop: 16 }}>{t('up.takes')}</p>
+        {!finished ? (
+          <>
+            <div className="proc-steps">
+              {PROC_STEPS.map((s, i) => {
+                const state = i < activeStep ? 'done' : i === activeStep ? 'active' : 'pending';
+                return (
+                  <div key={i} className={`proc-step ${state}`}>
+                    <span className="proc-dot">
+                      {state === 'done' ? <IconCheck size={13} sw={2.5} /> : state === 'active' ? <IconSpin size={14} className="spin" /> : i + 1}
+                    </span>
+                    <div>
+                      <div className="pl">{s.label}</div>
+                      <div className="ps">{s.sub}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="muted" style={{ fontSize: 13, marginTop: 16 }}>{t('up.takes')}</p>
+          </>
+        ) : (
+          <>
+            <DetectedInstrumentsBanner
+              instruments={detected}
+              titleKey={bannerKeys.titleKey}
+              subKey={bannerKeys.subKey}
+            />
+            <div className="row center" style={{ marginTop: 24 }}>
+              <button type="button" className="btn btn-primary btn-lg" onClick={onDone}>
+                {t('up.chooseInstrument')} <IconArrow size={17} />
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -215,15 +275,24 @@ export function UploadScreen() {
   const [songId, setSongId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [instruments, setInstruments] = useState<InstrumentKey[]>([]);
+  const [instrumentError, setInstrumentError] = useState<string | null>(null);
 
   async function startProcess(file: File) {
+    if (!instruments.length) {
+      setInstrumentError(t('up.instrumentsRequired'));
+      return;
+    }
+
     setFileName(file.name);
     setErrorMessage(null);
+    setInstrumentError(null);
     setSubmitting(true);
     setStage('uploading');
 
     const form = new FormData();
     form.set('audio', file);
+    for (const inst of instruments) form.append('instruments', inst);
 
     try {
       const res = await fetch('/api/songs', { method: 'POST', body: form });
@@ -287,5 +356,16 @@ export function UploadScreen() {
     );
   }
 
-  return <Dropzone onPick={startProcess} disabled={submitting} />;
+  return (
+    <Dropzone
+      onPick={startProcess}
+      disabled={submitting}
+      instruments={instruments}
+      onInstrumentsChange={(next) => {
+        setInstruments(next);
+        if (next.length) setInstrumentError(null);
+      }}
+      instrumentError={instrumentError}
+    />
+  );
 }

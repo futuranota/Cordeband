@@ -1,4 +1,5 @@
 import { runMockUserProcessor } from '@/lib/mock-audio-processor';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function dispatchSongProcessing(
   songId: string,
@@ -7,6 +8,13 @@ export async function dispatchSongProcessing(
 ): Promise<void> {
   const baseUrl = process.env.AUDIO_PROCESSOR_URL?.trim();
   if (baseUrl) {
+    const admin = createAdminClient();
+    const { data: song } = await admin
+      .from('songs')
+      .select('instruments')
+      .eq('id', songId)
+      .single();
+
     const apiKey = process.env.AUDIO_PROCESSOR_API_KEY?.trim();
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/process`, {
       method: 'POST',
@@ -18,6 +26,7 @@ export async function dispatchSongProcessing(
         song_id: songId,
         storage_path: storagePath,
         job_id: jobId,
+        instrument_hint: song?.instruments ?? [],
       }),
     });
     if (!res.ok) {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getInstrumentDetectionMode } from '@/lib/instrument-detection';
 import { createClient } from '@/lib/supabase/server';
 
 type Params = { params: Promise<{ id: string }> };
@@ -15,7 +16,7 @@ export async function GET(_request: Request, { params }: Params) {
 
   const { data: song, error: songErr } = await supabase
     .from('songs')
-    .select('id, status, user_id')
+    .select('id, status, user_id, instruments')
     .eq('id', songId)
     .single();
 
@@ -38,5 +39,10 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: jobErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ job, songStatus: song.status });
+  return NextResponse.json({
+    job,
+    songStatus: song.status,
+    instruments: song.instruments ?? [],
+    detectionMode: getInstrumentDetectionMode(),
+  });
 }

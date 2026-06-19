@@ -8,8 +8,11 @@ import { INST_ORDER, INSTRUMENTS, LIBRARY, type InstrumentKey } from '@/lib/data
 import { fetchSongById, saveActiveSongId } from '@/lib/supabase/fetch-song';
 import type { Song } from '@/lib/data';
 import { StagePanel } from '@/components/player/StagePanel';
+import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
 import { ClassicLoader } from '@/components/ui/ClassicLoader';
 import { IconArrow, IconArrowL, IconCheck } from '@/components/ui/icons';
+import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
+import { instrumentBannerKeys, instrumentSelectorBannerKey } from '@/lib/instrument-detection';
 
 const DEMO_SONG = LIBRARY[0];
 
@@ -22,10 +25,26 @@ function InstrumentScreenInner() {
   const [song, setSong] = useState<Song | null>(null);
   const [loading, setLoading] = useState(!!songId);
   const [error, setError] = useState<string | null>(null);
+  const [detectionMode, setDetectionMode] = useState<InstrumentDetectionMode>('manual');
 
   const activeSong = song ?? (songId ? null : DEMO_SONG);
   const available = new Set(activeSong?.instruments ?? []);
   const [sel, setSel] = useState<InstrumentKey | null>(null);
+  const bannerKeys = instrumentBannerKeys(detectionMode);
+  const isManual = detectionMode === 'manual';
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/processing-config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        if (data.detectionMode === 'auto' || data.detectionMode === 'manual') {
+          setDetectionMode(data.detectionMode);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!songId) {
@@ -101,7 +120,9 @@ function InstrumentScreenInner() {
       <div style={{ textAlign: 'center' }}>
         <span className="eyebrow">{activeSong?.title ?? '—'}</span>
         <h1 className="h1" style={{ fontSize: 'clamp(32px,4vw,46px)', marginTop: 14 }}>{t('sel.whatPlay')}</h1>
-        <p className="lead" style={{ margin: '16px auto 0', maxWidth: '44ch' }}>{t('sel.sub')}</p>
+        <p className="lead" style={{ margin: '16px auto 0', maxWidth: '44ch' }}>
+          {isManual ? t('sel.subManual') : t('sel.sub')}
+        </p>
         {error && (
           <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>{error}</p>
         )}
@@ -116,6 +137,14 @@ function InstrumentScreenInner() {
         />
       </div>
 
+      {(activeSong?.instruments?.length ?? 0) > 0 && activeSong && (
+        <DetectedInstrumentsBanner
+          instruments={activeSong.instruments}
+          titleKey={instrumentSelectorBannerKey(detectionMode)}
+          subKey={bannerKeys.subKey}
+        />
+      )}
+
       <div className="inst-grid">
         {INST_ORDER.map((k) => {
           const { Icon } = INSTRUMENTS[k];
@@ -127,6 +156,8 @@ function InstrumentScreenInner() {
               type="button"
               className={`inst-card${isSel ? ' sel' : ''}${on ? '' : ' off'}`}
               disabled={!on}
+              title={!on ? (isManual ? t('sel.notIndicatedHint') : t('sel.notDetectedHint')) : undefined}
+              aria-disabled={!on}
               onClick={() => on && setSel(k)}
             >
               {isSel && (
@@ -135,7 +166,7 @@ function InstrumentScreenInner() {
               <span className="inst-ico"><Icon size={34} sw={1.4} /></span>
               <span className="inst-name">{t(`inst.${k}`)}</span>
               <span className="inst-state">
-                {on ? (k === 'guitar' ? t('sel.last') : t('common.available')) : t('sel.notDetected')}
+                {on ? (k === 'guitar' ? t('sel.last') : t('common.available')) : (isManual ? t('sel.notIndicated') : t('sel.notDetected'))}
               </span>
             </button>
           );
