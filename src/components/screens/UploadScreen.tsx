@@ -176,13 +176,20 @@ function ProcessingStatus({
     let cancelled = false;
 
     async function poll() {
+      let pollErrors = 0;
+      const maxPollErrors = 8;
+
       while (!cancelled) {
         try {
           const done = await checkJob();
+          pollErrors = 0;
           if (done) return;
         } catch {
-          if (!cancelled) onFailed(t('up.errB'));
-          return;
+          pollErrors += 1;
+          if (pollErrors >= maxPollErrors && !cancelled) {
+            onFailed(t('up.errPoll'));
+            return;
+          }
         }
         await new Promise((r) => setTimeout(r, 1200));
       }

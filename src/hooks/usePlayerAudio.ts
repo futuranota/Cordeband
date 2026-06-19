@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { InstrumentKey } from '@/lib/data';
 import { fetchSongStems } from '@/lib/supabase/fetch-song-stems';
 import { usePlayerStore } from '@/stores/playerStore';
 
-const DEF_VOL: Record<string, number> = {
+export const STEM_DEF_VOL: Record<string, number> = {
   vocals: 78, drums: 82, bass: 80, piano: 70, guitar: 76, other: 64,
 };
 
@@ -13,7 +13,10 @@ export type UsePlayerAudioOptions = {
   enabled: boolean;
   songId: string | null;
   bpm: number;
+  /** Score length in beats (0 when no transcribed score). */
   totalBeats: number;
+  /** Song duration from DB — extends playback past score length. */
+  durationSeconds?: number;
   instrument: InstrumentKey;
   vols: Record<string, number>;
   tempo: number;
@@ -22,6 +25,31 @@ export type UsePlayerAudioOptions = {
 
 function beatToSeconds(beat: number, bpm: number): number {
   return beat * 60 / bpm;
+}
+
+function secondsToBeats(seconds: number, bpm: number): number {
+  return (seconds * bpm) / 60;
+}
+
+function safeCloseAudioContext(ctx: AudioContext | null | undefined) {
+  if (!ctx || ctx.state === 'closed') return;
+  // #region agent log
+  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7513/ingest/af9b1d32-4cd2-4edf-9e4f-7af87a58ddb5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7dccd2'},body:JSON.stringify({sessionId:'7dccd2',location:'usePlayerAudio.ts:safeClose',message:'closing AudioContext',data:{state:ctx.state},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
+  void ctx.close().catch(() => {});
+}
+
+function playbackLimitBeats(
+  scoreBeats: number,
+  durationSeconds: number | undefined,
+  bpm: number,
+  maxBufferSeconds: number,
+): number {
+  const fromSong = durationSeconds && durationSeconds > 0
+    ? secondsToBeats(durationSeconds, bpm)
+    : 0;
+  const fromBuffers = maxBufferSeconds > 0 ? secondsToBeats(maxBufferSeconds, bpm) : 0;
+  return Math.max(scoreBeats, fromSong, fromBuffers, 1);
 }
 
 export function usePlayerAudio(opts: UsePlayerAudioOptions) {
@@ -48,6 +76,20 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
   const rafRef = useRef(0);
   const optsRef = useRef(opts);
   optsRef.current = opts;
+  const playbackLimitRef = useRef(1);
+  const [playbackLimit, setPlaybackLimit] = useState(1);
+  const [loadedStems, setLoadedStems] = useState<InstrumentKey[]>([]);
+
+  const refreshPlaybackLimit = useCallback((maxBufferSeconds = 0) => {
+    const { totalBeats, durationSeconds, bpm } = optsRef.current;
+    playbackLimitRef.current = playbackLimitBeats(
+      totalBeats,
+      durationSeconds,
+      bpm,
+      maxBufferSeconds,
+    );
+    setPlaybackLimit(playbackLimitRef.current);
+  }, []);
 
   const stopSources = useCallback(() => {
     for (const src of sourcesRef.current) {
@@ -63,7 +105,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
       if (inst === instrument) {
         gain.gain.value = 0;
       } else {
-        const pct = vols[inst] ?? DEF_VOL[inst] ?? 70;
+        const pct = vols[inst] ?? STEM_DEF_VOL[inst] ?? 70;
         gain.gain.value = Math.max(0, Math.min(1, pct / 100));
       }
     }
@@ -98,7 +140,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
     if (ctx && playing) {
       const elapsed = (ctx.currentTime - playStartCtxRef.current) * optsRef.current.tempo;
       const beat = startBeatRef.current + elapsed * (optsRef.current.bpm / 60);
-      setCurBeat(Math.min(beat, optsRef.current.totalBeats));
+      setCurBeat(Math.min(beat, playbackLimitRef.current));
     }
     stopSources();
     setPlaying(false);
@@ -122,7 +164,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
   }, [pause, play, playing]);
 
   const seek = useCallback((beat: number) => {
-    const clamped = Math.max(0, Math.min(beat, optsRef.current.totalBeats));
+    const clamped = Math.max(0, Math.min(beat, playbackLimitRef.current));
     setCurBeat(clamped);
     if (playing) {
       startSources(clamped);
@@ -134,13 +176,22 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
   }, [applyVols, opts.instrument, opts.vols]);
 
   useEffect(() => {
+    const maxSec = Math.max(
+      ...Array.from(buffersRef.current.values()).map((b) => b.duration),
+      0,
+    );
+    refreshPlaybackLimit(maxSec);
+  }, [opts.totalBeats, opts.durationSeconds, opts.bpm, refreshPlaybackLimit]);
+
+  useEffect(() => {
     if (!opts.enabled || !opts.songId) {
       reset();
       stopSources();
       buffersRef.current.clear();
       gainsRef.current.clear();
+      setLoadedStems([]);
       if (ctxRef.current) {
-        void ctxRef.current.close();
+        safeCloseAudioContext(ctxRef.current);
         ctxRef.current = null;
       }
       return;
@@ -150,6 +201,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
     reset();
     setAudioLoading(true);
     setAudioError(null);
+    setLoadedStems([]);
 
     void (async () => {
       try {
@@ -170,7 +222,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
         );
 
         if (cancelled) {
-          void ctx.close();
+          safeCloseAudioContext(ctx);
           return;
         }
 
@@ -186,6 +238,14 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
           gainsRef.current.set(instrument, gain);
         }
 
+        const stemKeys = decoded.map((d) => d.instrument);
+        setLoadedStems(stemKeys);
+
+        const maxBufferSeconds = decoded.reduce(
+          (max, item) => Math.max(max, item.buffer.duration),
+          0,
+        );
+        refreshPlaybackLimit(maxBufferSeconds);
         applyVols();
         setAudioReady(true);
         setAudioLoading(false);
@@ -194,6 +254,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
         setAudioError(err instanceof Error ? err.message : 'Audio load failed');
         setAudioLoading(false);
         setAudioReady(false);
+        setLoadedStems([]);
       }
     })();
 
@@ -201,11 +262,11 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
       cancelled = true;
       stopSources();
       if (ctxRef.current) {
-        void ctxRef.current.close();
+        safeCloseAudioContext(ctxRef.current);
         ctxRef.current = null;
       }
     };
-  }, [opts.enabled, opts.songId, applyVols, reset, setAudioError, setAudioLoading, setAudioReady, stopSources]);
+  }, [opts.enabled, opts.songId, applyVols, refreshPlaybackLimit, reset, setAudioError, setAudioLoading, setAudioReady, stopSources]);
 
   useEffect(() => {
     if (!playing || !audioReady) {
@@ -217,7 +278,8 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
       const ctx = ctxRef.current;
       if (!ctx) return;
 
-      const { bpm, tempo, totalBeats, loop } = optsRef.current;
+      const { bpm, tempo, loop } = optsRef.current;
+      const limit = playbackLimitRef.current;
       const elapsed = Math.max(0, (ctx.currentTime - playStartCtxRef.current) * tempo);
       let beat = startBeatRef.current + elapsed * (bpm / 60);
 
@@ -229,8 +291,8 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
         return;
       }
 
-      if (beat >= totalBeats) {
-        setCurBeat(totalBeats);
+      if (beat >= limit) {
+        setCurBeat(limit);
         pause();
         return;
       }
@@ -255,6 +317,8 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
     audioError,
     playing,
     curBeat,
+    playbackLimitBeats: playbackLimit,
+    loadedStems,
     play,
     pause,
     toggle,

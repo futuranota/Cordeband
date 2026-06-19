@@ -18,9 +18,25 @@ const C_NOTE = '#cfcfcf';
 const xAt = (beat: number) => LEFT + beat * PPB;
 const yAt = (s: number) => STAFF_TOP + ((8 - s) / 2) * GAP;
 
-function StaffView({ notes, totalWidth, curBeat }: { notes: ScoreNote[]; totalWidth: number; curBeat: number }) {
+function barBeats(scoreTotal: number): number[] {
   const bars: number[] = [];
-  for (let b = 0; b <= SCORE.totalBeats; b += 4) bars.push(b);
+  const limit = Math.max(scoreTotal, 4);
+  for (let b = 0; b <= limit; b += 4) bars.push(b);
+  return bars;
+}
+
+function StaffView({
+  notes,
+  totalWidth,
+  curBeat,
+  scoreTotal,
+}: {
+  notes: ScoreNote[];
+  totalWidth: number;
+  curBeat: number;
+  scoreTotal: number;
+}) {
+  const bars = barBeats(scoreTotal);
 
   return (
     <svg width={totalWidth} height={SHEET_H} style={{ display: 'block' }}>
@@ -74,12 +90,21 @@ function StaffView({ notes, totalWidth, curBeat }: { notes: ScoreNote[]; totalWi
   );
 }
 
-function TabView({ notes, totalWidth, curBeat }: { notes: ScoreNote[]; totalWidth: number; curBeat: number }) {
+function TabView({
+  notes,
+  totalWidth,
+  curBeat,
+  scoreTotal,
+}: {
+  notes: ScoreNote[];
+  totalWidth: number;
+  curBeat: number;
+  scoreTotal: number;
+}) {
   const tTop = 70;
   const tGap = 18;
   const yStr = (s: number) => tTop + s * tGap;
-  const bars: number[] = [];
-  for (let b = 0; b <= SCORE.totalBeats; b += 4) bars.push(b);
+  const bars = barBeats(scoreTotal);
 
   return (
     <svg width={totalWidth} height={SHEET_H} style={{ display: 'block' }}>
@@ -108,17 +133,26 @@ function TabView({ notes, totalWidth, curBeat }: { notes: ScoreNote[]; totalWidt
   );
 }
 
-function RollView({ notes, totalWidth, curBeat }: { notes: ScoreNote[]; totalWidth: number; curBeat: number }) {
+function RollView({
+  notes,
+  totalWidth,
+  curBeat,
+  scoreTotal,
+}: {
+  notes: ScoreNote[];
+  totalWidth: number;
+  curBeat: number;
+  scoreTotal: number;
+}) {
   const midis = notes.map((n) => n.midi);
-  const lo = Math.min(...midis) - 1;
-  const hi = Math.max(...midis) + 1;
+  const lo = midis.length ? Math.min(...midis) - 1 : 60;
+  const hi = midis.length ? Math.max(...midis) + 1 : 72;
   const laneH = 13;
   const rTop = 22;
   const yMidi = (m: number) => rTop + (hi - m) * laneH;
   const rows: number[] = [];
   for (let m = lo; m <= hi; m++) rows.push(m);
-  const bars: number[] = [];
-  for (let b = 0; b <= SCORE.totalBeats; b += 4) bars.push(b);
+  const bars = barBeats(scoreTotal);
 
   return (
     <svg width={totalWidth} height={SHEET_H} style={{ display: 'block' }}>
@@ -182,9 +216,20 @@ type SheetViewerProps = {
   waitLabel?: string;
   notes?: ScoreNote[];
   totalBeats?: number;
+  emptyMessage?: string;
 };
 
-export function SheetViewer({ view, curBeat, loop, loading, waiting, waitLabel, notes, totalBeats }: SheetViewerProps) {
+export function SheetViewer({
+  view,
+  curBeat,
+  loop,
+  loading,
+  waiting,
+  waitLabel,
+  notes,
+  totalBeats,
+  emptyMessage,
+}: SheetViewerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [vw, setVw] = useState(720);
 
@@ -199,9 +244,18 @@ export function SheetViewer({ view, curBeat, loop, loading, waiting, waitLabel, 
 
   const scoreNotes = notes ?? SCORE.notes;
   const scoreTotal = totalBeats ?? SCORE.totalBeats;
-  const totalWidth = xAt(scoreTotal) + RIGHT;
+  const isEmpty = scoreNotes.length === 0;
+  const displayTotal = isEmpty ? Math.max(scoreTotal, 16) : scoreTotal;
+  const totalWidth = xAt(displayTotal) + RIGHT;
   const cursorX = Math.max(150, Math.min(340, vw * 0.30));
   const translate = cursorX - xAt(curBeat);
+
+  const viewProps = {
+    notes: scoreNotes,
+    totalWidth,
+    curBeat,
+    scoreTotal: displayTotal,
+  };
 
   const View = view === 'tab' ? TabView : view === 'roll' ? RollView : StaffView;
 
@@ -215,16 +269,21 @@ export function SheetViewer({ view, curBeat, loop, loading, waiting, waitLabel, 
             <div className="sheet-loadbar"><i className="load-anim" /></div>
           </div>
         )}
+        {!loading && isEmpty && emptyMessage && (
+          <div className="sheet-wait-overlay">
+            <span>{emptyMessage}</span>
+          </div>
+        )}
         <div className="sheet-track" style={{ transform: `translateX(${translate}px)`, width: totalWidth }}>
           {loop && (
             <div className="loop-band" style={{ left: xAt(loop.a), width: (loop.b - loop.a) * PPB }} />
           )}
-          <View notes={scoreNotes} totalWidth={totalWidth} curBeat={curBeat} />
+          {!isEmpty && <View {...viewProps} />}
         </div>
         <LeftPanel view={view} />
         <div className="sheet-fade-r" />
         <div className="sheet-cursor" style={{ left: cursorX }} />
-        {waiting && !loading && (
+        {waiting && !loading && !isEmpty && (
           <div className="sheet-wait-overlay"><span>{waitLabel}</span></div>
         )}
       </div>

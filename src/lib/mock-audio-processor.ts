@@ -5,18 +5,16 @@ import { SCORE, type InstrumentKey } from '@/lib/data';
 import { uploadStemWav, userStemPath } from '@/lib/supabase/user-song-storage';
 
 const STEMS_TTL_MS = 48 * 60 * 60 * 1000;
-const PLACEHOLDER_WAV_SECS = 30;
 const CATALOG_SET = new Set<string>(CATALOG_INSTRUMENTS);
 
 function buildNotesForInstrument(instrument: string) {
-  const notes = SCORE.notes.slice(0, 32).map((n) => ({
+  return SCORE.notes.map((n) => ({
     beat: n.beat,
     dur: n.dur,
     midi: n.midi,
     s: n.s,
     tab: instrument === 'guitar' || instrument === 'bass' ? n.tab : undefined,
   }));
-  return notes;
 }
 
 const STEP_DELAYS_MS = [800, 1200, 1500, 1000];
@@ -87,7 +85,11 @@ async function runMockProcessor(
     const mockBpm = 96 + Math.floor(Math.random() * 40);
     const mockKeys = ['Do mayor', 'La menor', 'Mi mayor', 'Re menor', 'Sol mayor'];
     const keySig = mockKeys[Math.floor(Math.random() * mockKeys.length)];
-    const placeholderWav = createSilentWavBuffer(PLACEHOLDER_WAV_SECS);
+    const mockDurationSecs = Math.max(
+      30,
+      Math.ceil((SCORE.totalBeats * 60) / mockBpm),
+    );
+    const placeholderWav = createSilentWavBuffer(mockDurationSecs);
     const detected: InstrumentKey[] = [];
 
     for (const instrument of toProcess) {
@@ -136,7 +138,7 @@ async function runMockProcessor(
       bpm: mockBpm,
       key_signature: keySig,
       instruments: detected,
-      duration_seconds: 210,
+      duration_seconds: mockDurationSecs,
       stems_expires_at: options.stemsExpiresAt,
     }).eq('id', songId);
 

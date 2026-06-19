@@ -26,13 +26,24 @@ def _midi_to_tab(midi: int) -> dict[str, int]:
 
 
 def basic_pitch_events_to_score_notes(
-    events: list[tuple[float, float, int, int]],
+    events: list,
     bpm: float,
     instrument: str,
 ) -> list[dict[str, Any]]:
-    """Convert Basic Pitch note_events (start, end, pitch, velocity) to Cordeband JSON."""
+    """Convert Basic Pitch note_events to Cordeband JSON.
+
+    Events are 4- or 5-tuples: (start, end, pitch, amplitude[, pitch_bends]).
+    """
     notes: list[dict[str, Any]] = []
-    for start, end, pitch, _velocity in events:
+    for event in events:
+        if not isinstance(event, (list, tuple)) or len(event) < 3:
+            continue
+        try:
+            start = float(event[0])
+            end = float(event[1])
+            pitch = int(event[2])
+        except (TypeError, ValueError):
+            continue
         duration = max(end - start, 0.05)
         beat = (start * bpm) / 60.0
         dur = (duration * bpm) / 60.0

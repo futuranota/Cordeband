@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
-import { SCORE, staffPos, midiToTab, type InstrumentKey, type ScoreNote } from '@/lib/data';
+import { staffPos, midiToTab, type InstrumentKey, type ScoreNote } from '@/lib/data';
 
 export type SongScore = {
   notes: ScoreNote[];
@@ -39,7 +39,7 @@ function asScoreNote(raw: unknown, bpm = 120): ScoreNote | null {
 
 export function buildScoreFromNotes(rawNotes: unknown, bpm = 120): SongScore {
   if (!Array.isArray(rawNotes) || rawNotes.length === 0) {
-    return { notes: SCORE.notes, totalBeats: SCORE.totalBeats, fromDb: false };
+    return { notes: [], totalBeats: 0, fromDb: false };
   }
 
   const notes = rawNotes
@@ -48,7 +48,7 @@ export function buildScoreFromNotes(rawNotes: unknown, bpm = 120): SongScore {
     .sort((a, b) => a.beat - b.beat);
 
   if (!notes.length) {
-    return { notes: SCORE.notes, totalBeats: SCORE.totalBeats, fromDb: false };
+    return { notes: [], totalBeats: 0, fromDb: false };
   }
 
   const totalBeats = notes.reduce((max, n) => Math.max(max, n.beat + n.dur), 0);

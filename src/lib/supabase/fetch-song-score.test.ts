@@ -12,4 +12,11 @@ describe('buildScoreFromNotes basic pitch format', () => {
     expect(score.notes[0]?.beat).toBe(0);
     expect(score.notes[0]?.dur).toBe(1);
   });
+
+  it('returns empty score when no notes', () => {
+    const score = buildScoreFromNotes([], 120);
+    expect(score.fromDb).toBe(false);
+    expect(score.notes).toHaveLength(0);
+    expect(score.totalBeats).toBe(0);
+  });
 });

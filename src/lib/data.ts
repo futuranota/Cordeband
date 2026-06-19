@@ -88,8 +88,21 @@ export const STEMS: StemTrack[] = [
   { key: 'drums',  name: 'Batería',  Icon: InstDrums,  def: 82 },
   { key: 'bass',   name: 'Bajo',     Icon: InstBass,   def: 80 },
   { key: 'piano',  name: 'Piano',    Icon: InstPiano,  def: 70 },
-  { key: 'guitar', name: 'Guitarra', Icon: InstGuitar, def: 0  },
+  { key: 'guitar', name: 'Guitarra', Icon: InstGuitar, def: 76 },
+  { key: 'other',  name: 'Otros',    Icon: InstOther,  def: 64 },
 ];
+
+export function stemTracksFor(keys: InstrumentKey[]): StemTrack[] {
+  const set = new Set(keys);
+  return INST_ORDER.filter((k) => set.has(k)).map(
+    (k) => STEMS.find((s) => s.key === k) ?? {
+      key: k,
+      name: INSTRUMENTS[k].name,
+      Icon: INSTRUMENTS[k].Icon,
+      def: 70,
+    },
+  );
+}
 
 /* ── Stem TTL helpers ─────────────────────────────────────── */
 export function stemsMsLeft(song: Song): number {

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { useSession } from '@/contexts/SessionContext';
 import {
-  STEMS, LIBRARY, SCORE, fmtTime, getAffiliates,
+  STEMS, LIBRARY, SCORE, fmtTime, getAffiliates, stemTracksFor,
   INSTRUMENTS, type InstrumentKey, type Song, type AffiliateProduct,
 } from '@/lib/data';
 import { fetchSongById, readActiveSongId, saveActiveSongId } from '@/lib/supabase/fetch-song';
@@ -28,6 +28,9 @@ import {
 } from '@/lib/band-schedule';
 import { normalizePlan } from '@/lib/supabase/profile';
 import { StagePanel } from '@/components/player/StagePanel';
+import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
+import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
+import { instrumentBannerKeys } from '@/lib/instrument-detection';
 import { SheetViewer } from '@/components/player/SheetViewer';
 import { AlphaTabViewer } from '@/components/player/AlphaTabViewer';
 import { BandSessionPanel } from '@/components/player/BandSessionPanel';
@@ -36,7 +39,7 @@ import { BandTimeline } from '@/components/player/BandTimeline';
 import { useBandTurnOverlay } from '@/hooks/useBandTurnOverlay';
 import { useBandRoom } from '@/hooks/useBandRoom';
 import { useBandSync } from '@/hooks/useBandSync';
-import { usePlayerAudio } from '@/hooks/usePlayerAudio';
+import { usePlayerAudio, STEM_DEF_VOL } from '@/hooks/usePlayerAudio';
 import { notesToAlphaTex } from '@/lib/alphatab/notes-to-alphatex';
 import {
   buildDemoBandRoom,
@@ -53,7 +56,6 @@ import {
 } from '@/components/ui/icons';
 
 const DEMO_SONG = LIBRARY[0];
-const DEF_VOL: Record<string, number> = { vocals: 78, drums: 82, bass: 80, piano: 70, guitar: 76, other: 64 };
 
 function readInstrument(): InstrumentKey {
   if (typeof window === 'undefined') return 'guitar';
@@ -61,11 +63,12 @@ function readInstrument(): InstrumentKey {
   return saved && INSTRUMENTS[saved] ? saved : 'guitar';
 }
 
-function buildDefaultVols(inst: InstrumentKey): Record<string, number> {
+function buildDefaultVols(inst: InstrumentKey, stemKeys?: InstrumentKey[]): Record<string, number> {
+  const keys = stemKeys?.length ? stemKeys : STEMS.map((s) => s.key);
   const v: Record<string, number> = {};
-  STEMS.forEach((s) => {
-    v[s.key] = s.key === inst ? 0 : (DEF_VOL[s.key] ?? 70);
-  });
+  for (const key of keys) {
+    v[key] = key === inst ? 0 : (STEM_DEF_VOL[key] ?? 70);
+  }
   return v;
 }
 
@@ -163,14 +166,19 @@ function TurnBanner({ status, secsToEntry, yourTime }: {
   );
 }
 
-function StemMixer({ song, instrument, vols, setVol }: {
-  song: Song;
+function StemMixer({
+  availableStems,
+  instrument,
+  vols,
+  setVol,
+}: {
+  availableStems: InstrumentKey[];
   instrument: InstrumentKey;
   vols: Record<string, number>;
   setVol: (k: string, v: number) => void;
 }) {
   const { t } = useT();
-  const stems = STEMS.filter((s) => song.instruments.includes(s.key));
+  const stems = stemTracksFor(availableStems);
 
   return (
     <div className="card mixer">
@@ -192,7 +200,7 @@ function StemMixer({ song, instrument, vols, setVol }: {
                   {t(`inst.${s.key}`)}{isYou && <span className="acc-text" style={{ fontSize: 11, fontWeight: 700 }}> · {t('common.you')}</span>}
                 </span>
                 <button type="button" className={`stem-mute${muted ? ' active' : ''}`}
-                  onClick={() => setVol(s.key, muted ? (DEF_VOL[s.key] ?? 70) : 0)}>
+                  onClick={() => setVol(s.key, muted ? (STEM_DEF_VOL[s.key] ?? 70) : 0)}>
                   {muted ? <IconMute size={16} /> : <IconVolume size={16} />}
                 </button>
               </div>
@@ -203,6 +211,71 @@ function StemMixer({ song, instrument, vols, setVol }: {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function PlayerBottom({
+  displayInstruments,
+  inst,
+  activeKeys,
+  memberLabels,
+  stageTitle,
+  stageSub,
+  detectionMode,
+  vols,
+  setVol,
+  scoreFromDb,
+  reprocessing,
+  onReprocess,
+}: {
+  displayInstruments: InstrumentKey[];
+  inst: InstrumentKey;
+  activeKeys?: InstrumentKey[];
+  memberLabels?: Partial<Record<InstrumentKey, string>>;
+  stageTitle: string;
+  stageSub: string;
+  detectionMode: InstrumentDetectionMode;
+  vols: Record<string, number>;
+  setVol: (k: string, v: number) => void;
+  scoreFromDb: boolean;
+  reprocessing: boolean;
+  onReprocess?: () => void;
+}) {
+  const { t } = useT();
+  const bannerKeys = instrumentBannerKeys(detectionMode);
+
+  return (
+    <div className="player-bottom">
+      {displayInstruments.length > 0 && (
+        <DetectedInstrumentsBanner
+          instruments={displayInstruments}
+          titleKey={bannerKeys.titleKey}
+          subKey={bannerKeys.subKey}
+        />
+      )}
+      {!scoreFromDb && onReprocess && (
+        <div className="card" style={{ marginBottom: 12, padding: '14px 16px' }}>
+          <p className="muted" style={{ margin: '0 0 10px', fontSize: 13.5 }}>{t('player.scoreEmpty')}</p>
+          <button type="button" className="btn btn-primary btn-sm" disabled={reprocessing} onClick={onReprocess}>
+            {reprocessing ? t('player.reprocessing') : t('player.reprocess')}
+          </button>
+        </div>
+      )}
+      <StagePanel
+        instruments={displayInstruments}
+        youKey={inst}
+        activeKeys={activeKeys}
+        memberLabels={memberLabels}
+        title={stageTitle}
+        sub={stageSub}
+      />
+      <StemMixer
+        availableStems={displayInstruments}
+        instrument={inst}
+        vols={vols}
+        setVol={setVol}
+      />
     </div>
   );
 }
@@ -310,6 +383,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const [vols, setVols] = useState<Record<string, number>>(() => buildDefaultVols('guitar'));
   const [affCollapsed, setAffCollapsed] = useState(false);
   const [bandPlayStartedAt, setBandPlayStartedAt] = useState<string | null>(null);
+  const [detectionMode, setDetectionMode] = useState<InstrumentDetectionMode>('auto');
+  const [reprocessing, setReprocessing] = useState(false);
 
   const isDemo = !user;
   const plan = isAdmin ? 'banda' : normalizePlan(profile?.plan);
@@ -325,7 +400,9 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const resolvedSongId = searchParams.get('songId') ?? (isDemo ? DEMO_SONG.id : readActiveSongId());
   const S = song ?? DEMO_SONG;
   const bpm = S.bpm || 84;
-  const total = score.totalBeats;
+  const scoreTotalBeats = isDemo ? SCORE.totalBeats : (score.fromDb ? score.totalBeats : 0);
+  const durationBeats = S.duration > 0 ? (S.duration * bpm) / 60 : 0;
+  const fallbackTotal = Math.max(isDemo ? SCORE.totalBeats : scoreTotalBeats, durationBeats, 1);
 
   const useRealAudio = !isDemo && !!resolvedSongId && !isBandView;
 
@@ -333,12 +410,20 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     enabled: useRealAudio,
     songId: resolvedSongId,
     bpm,
-    totalBeats: total,
+    totalBeats: scoreTotalBeats,
+    durationSeconds: S.duration,
     instrument,
     vols,
     tempo,
     loop,
   });
+
+  const total = useRealAudio ? audio.playbackLimitBeats : fallbackTotal;
+
+  const displayInstruments = useMemo(() => {
+    if (useRealAudio && audio.loadedStems.length) return audio.loadedStems;
+    return S.instruments;
+  }, [useRealAudio, audio.loadedStems, S.instruments]);
 
   const soloPlaying = useRealAudio ? audio.playing : playing;
   const soloCurBeat = useRealAudio ? audio.curBeat : curBeat;
@@ -375,6 +460,19 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const useLocalBandClock = !liveBandSession || bandRoom.useDemoFallback;
 
   useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/processing-config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        if (data.detectionMode === 'auto' || data.detectionMode === 'manual') {
+          setDetectionMode(data.detectionMode);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     const savedInst = readInstrument();
     setInstrument(savedInst);
     setVols(buildDefaultVols(savedInst));
@@ -382,6 +480,24 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       setAffCollapsed(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!useRealAudio || !audio.loadedStems.length) return;
+    setVols((prev) => {
+      const next = { ...prev };
+      for (const key of audio.loadedStems) {
+        if (next[key] === undefined) {
+          next[key] = key === instrument ? 0 : (STEM_DEF_VOL[key] ?? 70);
+        }
+      }
+      if (next[instrument] !== 0) next[instrument] = 0;
+      return next;
+    });
+  }, [useRealAudio, audio.loadedStems, instrument]);
+
+  useEffect(() => {
+    setVols(buildDefaultVols(instrument, displayInstruments));
+  }, [instrument]); // eslint-disable-line react-hooks/exhaustive-deps -- reset mute on instrument change
 
   useEffect(() => {
     if (isDemo) {
@@ -544,8 +660,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   const activeKeys = effectivePlaying && syncReady
     ? isBandView
-      ? activeInstrumentsAt(effectiveCurBeat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, S.instruments)
-      : activeInstrumentsAt(effectiveCurBeat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, S.instruments, {
+      ? activeInstrumentsAt(effectiveCurBeat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, displayInstruments)
+      : activeInstrumentsAt(effectiveCurBeat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, displayInstruments, {
           yourInstrument: inst,
           yourPartFractions: DEMO_YOUR_PART_FRACTIONS,
         })
@@ -721,11 +837,48 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     ? `/instrument?songId=${encodeURIComponent(resolvedSongId)}`
     : '/instrument';
 
+  async function reprocessSong() {
+    if (!resolvedSongId || isDemo || reprocessing) return;
+    setReprocessing(true);
+    try {
+      const res = await fetch(`/api/songs/${resolvedSongId}/reprocess`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Reprocess failed');
+
+      while (true) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const jobRes = await fetch(`/api/songs/${resolvedSongId}/job`);
+        if (!jobRes.ok) continue;
+        const jobData = await jobRes.json();
+        if (jobData.job?.status === 'failed') {
+          throw new Error(jobData.job.error_message ?? 'Processing failed');
+        }
+        if (jobData.job?.status === 'completed' || jobData.songStatus === 'ready') {
+          const refreshed = await fetchSongById(resolvedSongId);
+          if (refreshed) setSong(refreshed);
+          const inst = readInstrument();
+          const fetchedScore = await fetchSongScore(resolvedSongId, inst, refreshed?.bpm || bpm);
+          setScore(fetchedScore);
+          setToast(t('up.p4t'));
+          break;
+        }
+      }
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : t('up.errB'));
+    } finally {
+      setReprocessing(false);
+    }
+  }
+
   const renderSheet = (
     curBeatVal: number,
     playingVal: boolean,
     waitingVal: boolean,
   ) => {
+    const sheetNotes = isDemo ? SCORE.notes : score.notes;
+    const sheetTotalBeats = isDemo
+      ? SCORE.totalBeats
+      : (score.fromDb ? score.totalBeats : total);
     const sheetProps = {
       view,
       curBeat: curBeatVal,
@@ -733,8 +886,9 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       loading: displayLoading,
       waiting: waitingVal && !displayLoading && playingVal,
       waitLabel: t('player.waitOverlay'),
-      notes: score.notes,
-      totalBeats: score.totalBeats,
+      notes: sheetNotes,
+      totalBeats: sheetTotalBeats,
+      emptyMessage: !isDemo && !score.fromDb ? t('player.scoreEmpty') : undefined,
     };
 
     if (useAlphaTab && alphaTex && view !== 'roll') {
@@ -862,15 +1016,6 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 </div>
               </div>
 
-              <StagePanel
-                instruments={S.instruments}
-                youKey={inst}
-                activeKeys={activeKeys}
-                memberLabels={memberLabels}
-                title={t('bandDemo.stageTitle')}
-                sub={t('bandDemo.stageSub')}
-              />
-
               <BandTimeline
                 lanes={timelineLanes}
                 totalBeats={total}
@@ -922,7 +1067,20 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 </div>
               </div>
 
-              <StemMixer song={S} instrument={inst} vols={vols} setVol={setVol} />
+              <PlayerBottom
+                displayInstruments={displayInstruments}
+                inst={inst}
+                activeKeys={activeKeys}
+                memberLabels={memberLabels}
+                stageTitle={t('bandDemo.stageTitle')}
+                stageSub={t('bandDemo.stageSub')}
+                detectionMode={detectionMode}
+                vols={vols}
+                setVol={setVol}
+                scoreFromDb={isDemo || score.fromDb}
+                reprocessing={reprocessing}
+                onReprocess={!isDemo ? reprocessSong : undefined}
+              />
             </section>
           </div>
         </div>
@@ -949,14 +1107,6 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 ))}
               </div>
             </div>
-
-            <StagePanel
-              instruments={S.instruments}
-              youKey={inst}
-              activeKeys={activeKeys}
-              title={t('sel.stageTitle')}
-              sub={t('sel.stageSub')}
-            />
 
             <TurnBanner status={status} secsToEntry={secsToEntry} yourTime={yourTime} />
 
@@ -1010,7 +1160,19 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               </div>
             </div>
 
-            <StemMixer song={S} instrument={inst} vols={vols} setVol={setVol} />
+            <PlayerBottom
+              displayInstruments={displayInstruments}
+              inst={inst}
+              activeKeys={activeKeys}
+              stageTitle={t('sel.stageTitle')}
+              stageSub={t('sel.stageSub')}
+              detectionMode={detectionMode}
+              vols={vols}
+              setVol={setVol}
+              scoreFromDb={isDemo || score.fromDb}
+              reprocessing={reprocessing}
+              onReprocess={!isDemo ? reprocessSong : undefined}
+            />
           </section>
 
           {!affCollapsed && (
