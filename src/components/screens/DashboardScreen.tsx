@@ -18,6 +18,7 @@ import {
   IconPlus, IconCrown, IconBand, IconUpload, IconCheck,
   IconClock, IconNote, IconSpark, IconPlay, IconTrash,
 } from '@/components/ui/icons';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 function useStemsTick() {
   const [, force] = useState(0);
@@ -281,6 +282,7 @@ export function DashboardScreen() {
   const [featured, setFeatured] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Song | null>(null);
   const plan = isAdmin
     ? ADMIN_EFFECTIVE_PLAN
     : getEffectivePlan(user?.id, normalizePlan(profile?.plan));
@@ -314,8 +316,13 @@ export function DashboardScreen() {
     router.push('/instrument');
   }
 
-  async function deleteSong(song: Song) {
-    if (!window.confirm(t('dash.deleteConfirm').replace('{title}', song.title))) return;
+  function requestDelete(song: Song) {
+    setPendingDelete(song);
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const song = pendingDelete;
 
     setDeletingId(song.id);
     try {
@@ -328,6 +335,7 @@ export function DashboardScreen() {
       if (typeof window !== 'undefined' && localStorage.getItem('cordeband_song_id') === song.id) {
         localStorage.removeItem('cordeband_song_id');
       }
+      setPendingDelete(null);
     } catch (err) {
       window.alert(err instanceof Error ? err.message : t('dash.deleteError'));
     } finally {
@@ -380,7 +388,7 @@ export function DashboardScreen() {
               key={s.id}
               song={s}
               onOpen={openSong}
-              onDelete={deleteSong}
+              onDelete={requestDelete}
               deleting={deletingId === s.id}
             />
           ))}
@@ -410,6 +418,36 @@ export function DashboardScreen() {
       {featured.length > 0 && (
         <FeaturedSection items={featured} onOpen={openSong} />
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={t('dash.deleteSong')}
+        message={t('dash.deleteConfirm')}
+        confirmLabel={t('dash.deleteConfirmBtn')}
+        cancelLabel={t('dash.deleteCancelBtn')}
+        loading={deletingId !== null}
+        danger
+        icon={<IconTrash size={24} />}
+        onCancel={() => {
+          if (deletingId === null) setPendingDelete(null);
+        }}
+        onConfirm={confirmDelete}
+      >
+        {pendingDelete && (
+          <table className="confirm-summary">
+            <tbody>
+              <tr>
+                <th scope="row">{t('dash.deleteColSong')}</th>
+                <td>{pendingDelete.title}</td>
+              </tr>
+              <tr>
+                <th scope="row">{t('dash.deleteColArtist')}</th>
+                <td>{pendingDelete.artist}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+      </ConfirmDialog>
     </main>
   );
 }

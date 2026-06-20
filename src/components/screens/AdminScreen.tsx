@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/i18n/context';
 import { Logo } from '@/components/layout/Logo';
 import { FeaturedSongForm } from '@/components/admin/FeaturedSongForm';
+import { FunnelTable } from '@/components/admin/FunnelTable';
+import { BusinessAdminPanel } from '@/components/admin/BusinessAdminPanel';
 import { createClient } from '@/lib/supabase/client';
 import {
   loadAdminAffiliates, saveAdminAffiliates,
@@ -13,7 +15,7 @@ import { IconEdit, IconTrash, IconPlus, IconEye, IconEyeOff, IconExternal } from
 import { ClassicLoader } from '@/components/ui/ClassicLoader';
 import { LoadingButton } from '@/components/ui/LoadingButton';
 
-type Tab = 'aff' | 'feat';
+type Tab = 'aff' | 'feat' | 'funnel' | 'biz';
 
 function statusLabel(status: string | undefined, t: (k: string) => string): string {
   switch (status) {
@@ -268,14 +270,20 @@ export function AdminScreen() {
       </div>
 
       <div className="wrap" style={{ paddingTop: 40, paddingBottom: 80 }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>
-          {(['aff', 'feat'] as Tab[]).map((t2) => (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 32, flexWrap: 'wrap' }}>
+          {(['aff', 'feat', 'funnel', 'biz'] as Tab[]).map((t2) => (
             <button
               key={t2}
               onClick={() => setTab(t2)}
               className={`btn btn-sm ${tab === t2 ? 'btn-primary' : 'btn-ghost'}`}
             >
-              {t2 === 'aff' ? t('admin.tabAff') : t('admin.tabFeat')}
+              {t2 === 'aff'
+                ? t('admin.tabAff')
+                : t2 === 'feat'
+                  ? t('admin.tabFeat')
+                  : t2 === 'funnel'
+                    ? t('admin.tabFunnel')
+                    : t('admin.tabBiz')}
             </button>
           ))}
         </div>
@@ -360,6 +368,10 @@ export function AdminScreen() {
             )}
           </div>
         )}
+
+        {tab === 'funnel' && <FunnelTable />}
+
+        {tab === 'biz' && <BusinessAdminPanel />}
 
         {tab === 'feat' && (
           <div>

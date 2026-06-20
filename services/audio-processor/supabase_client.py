@@ -27,7 +27,7 @@ def upload_stem_wav(client: Client, storage_path: str, wav_bytes: bytes) -> None
     client.storage.from_(STEMS_BUCKET).upload(
         storage_path,
         wav_bytes,
-        file_options={"content-type": "audio/wav", "x-upsert": "true"},
+        file_options={"content-type": "audio/mpeg", "x-upsert": "true"},
     )
 
 

@@ -7,6 +7,7 @@ import { useSession } from '@/contexts/SessionContext';
 import { IconCheck } from '@/components/ui/icons';
 import { LoadingButton } from '@/components/ui/LoadingButton';
 import { ProfilePlanStrip } from '@/components/billing/ProfilePlanStrip';
+import { ProfileLocationCard } from '@/components/profile/ProfileLocationCard';
 import { UpgradePlanCards } from '@/components/billing/UpgradePlanCards';
 import { AddonSongCard } from '@/components/billing/AddonSongCard';
 import { CancelMembershipPanel } from '@/components/billing/CancelMembershipPanel';
@@ -64,6 +65,14 @@ export function ProfileScreen() {
       <ProfilePlanStrip plan={previewPlan} showPending={showPending} />
 
       <h1 className="h2 profile-page-title">{t('profile.title')}</h1>
+
+      {user && (
+        <ProfileLocationCard
+          userId={user.id}
+          initialCity={profile?.city ?? null}
+          initialPostalCode={profile?.postal_code ?? null}
+        />
+      )}
 
       {showPlanPicker && (
         <section id="plans" className="profile-section profile-plans-section">

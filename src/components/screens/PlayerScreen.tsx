@@ -27,6 +27,7 @@ import {
   viewerPartStatus,
 } from '@/lib/band-schedule';
 import { normalizePlan } from '@/lib/supabase/profile';
+import type { LocalBusiness } from '@/types/database';
 import { StagePanel } from '@/components/player/StagePanel';
 import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
 import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
@@ -280,16 +281,21 @@ function PlayerBottom({
   );
 }
 
-function AffiliateRail({ instrument, collapsed, onToggle, onClick }: {
+function AffiliateRail({ instrument, collapsed, onToggle, onClick, localBusinesses }: {
   instrument: InstrumentKey;
   collapsed: boolean;
   onToggle: () => void;
   onClick: (p: AffiliateProduct) => void;
+  localBusinesses: LocalBusiness[];
 }) {
   const { t } = useT();
   const items = getAffiliates(instrument);
+  const hasLocal = localBusinesses.length > 0;
+  const hasAffiliates = items.length > 0;
+  const hasContent = hasLocal || hasAffiliates;
 
   if (collapsed) {
+    if (!hasContent) return null;
     return (
       <aside className="aff-rail collapsed">
         <button
@@ -305,6 +311,8 @@ function AffiliateRail({ instrument, collapsed, onToggle, onClick }: {
       </aside>
     );
   }
+
+  if (!hasContent) return null;
 
   return (
     <aside className="aff-rail">
@@ -325,6 +333,48 @@ function AffiliateRail({ instrument, collapsed, onToggle, onClick }: {
         </button>
       </div>
       <div className="aff-list">
+        {hasLocal && (
+          <>
+            <div className="eyebrow" style={{ fontSize: 11, padding: '0 4px 8px', color: 'rgba(255,255,255,0.65)' }}>
+              {t('player.localBiz')}
+            </div>
+            {localBusinesses.map((biz) => {
+              const href = biz.maps_url || undefined;
+              return (
+                <a
+                  key={biz.id}
+                  className="card aff-card"
+                  href={href}
+                  target={href ? '_blank' : undefined}
+                  rel={href ? 'noopener noreferrer' : undefined}
+                >
+                  <div className="aff-thumb">
+                    {biz.banner_url
+                      ? <img src={biz.banner_url} alt={biz.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <IconCart size={20} />}
+                  </div>
+                  <div className="aff-info">
+                    <div className="aff-name">{biz.name}</div>
+                    <div className="aff-cat">{biz.city}{biz.postal_code ? ` · ${biz.postal_code}` : ''}</div>
+                    {biz.description && (
+                      <div className="aff-cat" style={{ marginTop: 4 }}>{biz.description}</div>
+                    )}
+                    {href && (
+                      <div className="aff-buy">
+                        <span className="aff-go">{t('player.localBizMaps')} <IconExternal size={12} /></span>
+                      </div>
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+          </>
+        )}
+        {hasAffiliates && hasLocal && (
+          <div className="eyebrow" style={{ fontSize: 11, padding: '16px 4px 8px', color: 'rgba(255,255,255,0.65)' }}>
+            {t('player.affRec')}
+          </div>
+        )}
         {items.map((p) => {
           const href = p.url || undefined;
           return (
@@ -382,6 +432,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const [toast, setToast] = useState<string | null>(null);
   const [vols, setVols] = useState<Record<string, number>>(() => buildDefaultVols('guitar'));
   const [affCollapsed, setAffCollapsed] = useState(false);
+  const [localBusinesses, setLocalBusinesses] = useState<LocalBusiness[]>([]);
   const [bandPlayStartedAt, setBandPlayStartedAt] = useState<string | null>(null);
   const [detectionMode, setDetectionMode] = useState<InstrumentDetectionMode>('auto');
   const [reprocessing, setReprocessing] = useState(false);
@@ -483,6 +534,23 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       setAffCollapsed(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLocalBusinesses([]);
+      return;
+    }
+    let cancelled = false;
+    fetch('/api/recommendations/local')
+      .then((res) => (res.ok ? res.json() : { businesses: [] }))
+      .then((data) => {
+        if (!cancelled) setLocalBusinesses(data.businesses ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setLocalBusinesses([]);
+      });
+    return () => { cancelled = true; };
+  }, [user, profile?.city, profile?.postal_code]);
 
   useEffect(() => {
     if (!useRealAudio || !audio.loadedStems.length) return;
@@ -1194,6 +1262,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               collapsed={false}
               onToggle={toggleAff}
               onClick={showToast}
+              localBusinesses={localBusinesses}
             />
           )}
         </div>
@@ -1205,6 +1274,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
           collapsed
           onToggle={toggleAff}
           onClick={showToast}
+          localBusinesses={localBusinesses}
         />
       )}
 
