@@ -87,13 +87,28 @@ def _run_demucs(input_path: Path, out_dir: Path) -> Path:
 
 def _stem_storage_path(song_id: str, instrument: str, is_featured: bool) -> str:
     if is_featured:
-        return f"featured/stems/{song_id}/{instrument}.wav"
-    return f"songs/{song_id}/stems/{instrument}.wav"
+        return f"featured/stems/{song_id}/{instrument}.mp3"
+    return f"songs/{song_id}/stems/{instrument}.mp3"
 
 
 def _all_demucs_stems(demucs_dir: Path) -> list[str]:
     """All stems Demucs produced (htdemucs_6s → up to 6 WAV files)."""
     return [inst for inst in DEMUCS_STEMS if (demucs_dir / f"{inst}.wav").exists()]
+
+
+def _convert_to_mp3(wav_path: Path, mp3_path: Path) -> Path:
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", str(wav_path),
+            "-codec:a", "libmp3lame",
+            "-b:a", "128k",
+            str(mp3_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return mp3_path
 
 
 def process_song(song_id: str, storage_path: str, job_id: str, _instrument_hint: list[str]) -> None:
@@ -130,8 +145,10 @@ def process_song(song_id: str, storage_path: str, job_id: str, _instrument_hint:
             update_job(client, job_id, progress_pct=PROGRESS_STEPS[3])
             for inst in upload_targets:
                 wav_path = stem_dir / f"{inst}.wav"
+                mp3_path = stem_dir / f"{inst}.mp3"
+                _convert_to_mp3(wav_path, mp3_path)
                 storage_target = _stem_storage_path(song_id, inst, is_featured)
-                upload_stem_wav(client, storage_target, wav_path.read_bytes())
+                upload_stem_wav(client, storage_target, mp3_path.read_bytes())
                 stem_id = insert_stem_row(client, song_id, inst, storage_target)
 
                 update_job(client, job_id, progress_pct=PROGRESS_STEPS[4])
