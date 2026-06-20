@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
     // Evita que Turbopack use /Users/r/package-lock.json y escanee ~/Downloads
     root: projectRoot,
   },
+  experimental: {
+    // Middleware/proxy buffers request bodies; uploads can reach 50 MB.
+    proxyClientMaxBodySize: '55mb',
+  },
 };
 
 export default nextConfig;

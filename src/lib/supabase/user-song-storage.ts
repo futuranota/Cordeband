@@ -14,6 +14,13 @@ export function userStemPath(songId: string, instrument: string): string {
   return `songs/${songId}/stems/${instrument}.wav`;
 }
 
+export async function createUserOriginalUploadUrl(path: string) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) throw error ?? new Error('Signed upload URL failed');
+  return data;
+}
+
 export async function uploadUserOriginal(
   path: string,
   file: Blob,

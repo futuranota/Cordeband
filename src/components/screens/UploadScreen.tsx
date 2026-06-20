@@ -297,16 +297,56 @@ export function UploadScreen() {
     setSubmitting(true);
     setStage('uploading');
 
-    const form = new FormData();
-    form.set('audio', file);
-    for (const inst of instruments) form.append('instruments', inst);
+    let createdSongId: string | null = null;
 
     try {
-      const res = await fetch('/api/songs', { method: 'POST', body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? t('up.errB'));
-      setSongId(data.song.id as string);
+      const initRes = await fetch('/api/songs/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileSize: file.size,
+          contentType: file.type || 'audio/mpeg',
+          instruments,
+        }),
+      });
+
+      if (initRes.status === 413) {
+        throw new Error(t('up.errSize'));
+      }
+
+      const initData = await initRes.json().catch(() => ({}));
+      if (!initRes.ok) {
+        throw new Error(initData.error ?? t('up.errB'));
+      }
+
+      createdSongId = initData.song.id as string;
+      const uploadRes = await fetch(initData.upload.signedUrl as string, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': initData.upload.contentType as string,
+          'x-upsert': 'true',
+        },
+        body: file,
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error(t('up.errB'));
+      }
+
+      const completeRes = await fetch(`/api/songs/${createdSongId}/upload-complete`, {
+        method: 'POST',
+      });
+      const completeData = await completeRes.json().catch(() => ({}));
+      if (!completeRes.ok) {
+        throw new Error(completeData.error ?? t('up.errB'));
+      }
+
+      setSongId(createdSongId);
     } catch (err) {
+      if (createdSongId) {
+        void fetch(`/api/songs/${createdSongId}`, { method: 'DELETE' });
+      }
       setStage('error');
       setErrorMessage(err instanceof Error ? err.message : t('up.errB'));
     } finally {
