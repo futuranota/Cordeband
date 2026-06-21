@@ -208,6 +208,7 @@ export type ScoreNote = {
   endTime?: number | null;
   confidence?: number | null;
   source?: string | null;
+  quality?: 'high' | 'medium' | 'draft' | 'unavailable' | null;
 };
 
 const E = 64, G = 67, A4 = 69, B4 = 71, C5 = 72, D = 62, C = 60, F = 65;

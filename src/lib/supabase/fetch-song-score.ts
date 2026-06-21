@@ -38,6 +38,11 @@ function asScoreNote(raw: unknown, bpm = 120): ScoreNote | null {
   const endTime = Number.isFinite(n.endTime) ? Number(n.endTime) : null;
   const confidence = Number.isFinite(n.confidence) ? Number(n.confidence) : null;
   const source = typeof n.source === 'string' ? n.source : null;
+  const qualityRaw = n.quality;
+  const quality =
+    qualityRaw === 'high' || qualityRaw === 'medium' || qualityRaw === 'draft' || qualityRaw === 'unavailable'
+      ? qualityRaw
+      : null;
 
   return {
     beat,
@@ -49,6 +54,7 @@ function asScoreNote(raw: unknown, bpm = 120): ScoreNote | null {
     endTime,
     confidence,
     source,
+    quality,
   };
 }
 

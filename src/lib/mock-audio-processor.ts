@@ -2,12 +2,17 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createSilentWavBuffer } from '@/lib/audio/wav-placeholder';
 import { CATALOG_INSTRUMENTS } from '@/types/catalog';
 import { SCORE, type InstrumentKey } from '@/lib/data';
+import { INSTRUMENT_QUALITY } from '@/lib/score-quality';
 import { uploadStemWav, userStemPath } from '@/lib/supabase/user-song-storage';
 
 const STEMS_TTL_MS = 48 * 60 * 60 * 1000;
 const CATALOG_SET = new Set<string>(CATALOG_INSTRUMENTS);
 
 function buildNotesForInstrument(instrument: string, bpm = 84) {
+  if (instrument === 'drums') {
+    return [];
+  }
+
   return SCORE.notes.map((n) => ({
     beat: n.beat,
     dur: n.dur,
@@ -17,6 +22,7 @@ function buildNotesForInstrument(instrument: string, bpm = 84) {
     endTime: ((n.beat + n.dur) * 60) / bpm,
     confidence: 1,
     source: 'ai_basic_pitch',
+    quality: INSTRUMENT_QUALITY[instrument as InstrumentKey] ?? 'draft',
     tab: instrument === 'guitar' || instrument === 'bass' ? n.tab : undefined,
   }));
 }

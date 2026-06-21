@@ -12,6 +12,14 @@ def _staff_pos(midi: int) -> int:
 TUNING = [64, 59, 55, 50, 45, 40]
 BASS_TUNING = [43, 38, 33, 28]  # E A D G (4-string bass)
 
+INSTRUMENT_QUALITY: dict[str, str] = {
+    "bass": "high",  # monofónico — BP funciona bien
+    "guitar": "medium",  # melódico ok, acordes limitado
+    "piano": "medium",  # polifónico — BP simplifica
+    "drums": "unavailable",  # BP no aplica para percusión
+    "other": "draft",  # impredecible
+}
+
 
 def _midi_to_tab(midi: int, tuning: list[int]) -> dict[str, int]:
     best: tuple[int, int] | None = None
@@ -43,6 +51,9 @@ def basic_pitch_events_to_score_notes(
 
     Events are 4- or 5-tuples: (start, end, pitch, amplitude[, pitch_bends]).
     """
+    if instrument == "drums":
+        return []
+
     notes: list[dict[str, Any]] = []
     for event in events:
         if not isinstance(event, (list, tuple)) or len(event) < 3:
@@ -68,6 +79,7 @@ def basic_pitch_events_to_score_notes(
             "s": _staff_pos(midi),
             "confidence": confidence,
             "source": "ai_basic_pitch",
+            "quality": INSTRUMENT_QUALITY.get(instrument, "draft"),
         }
         if instrument == "guitar":
             note["tab"] = _midi_to_guitar_tab(midi)

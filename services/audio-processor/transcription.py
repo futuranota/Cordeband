@@ -36,6 +36,9 @@ def _basic_pitch_model_path():
 
 
 def transcribe_stem(wav_path: Path, instrument: str, bpm: float) -> list[dict]:
+    if instrument == "drums":
+        return []
+
     try:
         from basic_pitch.inference import predict
     except ImportError as exc:

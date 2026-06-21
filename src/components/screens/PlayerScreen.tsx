@@ -41,6 +41,7 @@ import { BandTimeline } from '@/components/player/BandTimeline';
 import { SoloPracticeTimeline } from '@/components/player/SoloPracticeTimeline';
 import { LyricsViewer } from '@/components/player/LyricsViewer';
 import { ScoreSourceBadge } from '@/components/player/ScoreSourceBadge';
+import { isScoreUnavailable } from '@/lib/score-quality';
 import { useBandTurnOverlay } from '@/hooks/useBandTurnOverlay';
 import { useBandRoom } from '@/hooks/useBandRoom';
 import { useBandSync } from '@/hooks/useBandSync';
@@ -260,7 +261,7 @@ function PlayerBottom({
           subKey={bannerKeys.subKey}
         />
       )}
-      {!scoreFromDb && onReprocess && (
+      {!scoreFromDb && onReprocess && !isScoreUnavailable(inst) && (
         <div className="card" style={{ marginBottom: 12, padding: '14px 16px' }}>
           <p className="muted" style={{ margin: '0 0 10px', fontSize: 13.5 }}>{t('player.scoreEmpty')}</p>
           <button type="button" className="btn btn-primary btn-sm" disabled={reprocessing} onClick={onReprocess}>
@@ -1038,7 +1039,11 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       waitLabel: t('player.waitOverlay'),
       notes: sheetNotes,
       totalBeats: sheetTotalBeats,
-      emptyMessage: !isDemo && !score.fromDb ? t('player.scoreEmpty') : undefined,
+      emptyMessage: !isDemo && inst === 'drums'
+        ? t('player.scoreUnavailable')
+        : !isDemo && !score.fromDb
+          ? t('player.scoreEmpty')
+          : undefined,
     };
 
     if (useAlphaTab && alphaTex && view !== 'roll') {
@@ -1270,7 +1275,9 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               <ScoreSourceBadge
                 fromDb={score.fromDb}
                 isDemo={isDemo}
+                instrument={inst}
                 noteCount={inst === 'vocals' ? yourWindows.length : score.notes.length}
+                notes={score.notes}
               />
               {!soloPlaying && (score.notes.length > 0 || yourWindows.length > 0) && (
                 <span className="player-play-hint muted">{t('player.playToAnimate')}</span>
