@@ -1,8 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { getProfile, shouldRedirectToProfilePending } from '@/lib/supabase/profile';
+import { getProfile, getPostAuthRedirect } from '@/lib/supabase/profile';
 
-const ALLOWED_NEXT = new Set(['/reset-password', '/dashboard', '/profile']);
+const ALLOWED_NEXT = new Set(['/reset-password', '/dashboard', '/profile', '/studio']);
 
 function sanitizeNext(raw: string | null): string {
   if (!raw) return '/dashboard';
@@ -60,13 +60,10 @@ export async function GET(request: NextRequest) {
 
   if (user && redirectPath !== '/reset-password') {
     const profile = await getProfile(supabase, user.id);
-    if (shouldRedirectToProfilePending(profile)) {
+    if (redirectPath === '/dashboard' || redirectPath === '/studio') {
+      redirectPath = getPostAuthRedirect(profile);
+    } else if (getPostAuthRedirect(profile) === '/profile') {
       redirectPath = '/profile';
-      const profileResponse = NextResponse.redirect(`${origin}${redirectPath}`);
-      response.cookies.getAll().forEach((cookie) => {
-        profileResponse.cookies.set(cookie.name, cookie.value);
-      });
-      return profileResponse;
     }
   }
 

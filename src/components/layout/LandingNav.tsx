@@ -11,6 +11,7 @@ export function LandingNav() {
 
   const mobileItems = [
     { href: '#how', label: t('nav.how') },
+    { href: '/studio', label: t('nav.studio') },
     { href: '#pricing', label: t('nav.pricing') },
     { href: '#instruments', label: t('nav.instruments') },
     { href: '#band', label: t('nav.band') },
@@ -42,6 +43,7 @@ export function LandingNav() {
         </div>
         <div className="nav-links">
           <a href="#how" className="nav-link">{t('nav.how')}</a>
+          <Link href="/studio" className="nav-link">{t('nav.studio')}</Link>
           <a href="#pricing" className="nav-link">{t('nav.pricing')}</a>
           <a href="#instruments" className="nav-link">{t('nav.instruments')}</a>
           <a href="#band" className="nav-link">{t('nav.band')}</a>

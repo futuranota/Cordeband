@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
 import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
@@ -9,6 +9,10 @@ import { InstrumentPicker } from '@/components/instruments/InstrumentPicker';
 import type { InstrumentKey } from '@/lib/data';
 import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
 import { instrumentBannerKeys } from '@/lib/instrument-detection';
+import {
+  clearStudioInstrumentsForUpload,
+  readStudioInstrumentsForUpload,
+} from '@/lib/studio-config';
 import { IconUpload, IconCheck, IconSpin, IconCart, IconExternal, IconWave, IconArrow } from '@/components/ui/icons';
 
 type Stage = 'idle' | 'uploading' | 'error';
@@ -22,12 +26,14 @@ function Dropzone({
   instruments,
   onInstrumentsChange,
   instrumentError,
+  fromStudio,
 }: {
   onPick: (file: File) => void;
   disabled?: boolean;
   instruments: InstrumentKey[];
   onInstrumentsChange: (next: InstrumentKey[]) => void;
   instrumentError: string | null;
+  fromStudio?: boolean;
 }) {
   const { t } = useT();
   const [drag, setDrag] = useState(false);
@@ -57,6 +63,9 @@ function Dropzone({
       </div>
 
       <div className="card" style={{ marginBottom: 24, padding: 20, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
+        {fromStudio && (
+          <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>{t('up.fromStudioBanner')}</p>
+        )}
         <InstrumentPicker
           value={instruments}
           onChange={onInstrumentsChange}
@@ -276,7 +285,9 @@ function ProcessingStatus({
 
 export function UploadScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useT();
+  const fromStudio = searchParams.get('from') === 'studio';
   const [stage, setStage] = useState<Stage>('idle');
   const [fileName, setFileName] = useState('');
   const [songId, setSongId] = useState<string | null>(null);
@@ -284,6 +295,14 @@ export function UploadScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [instruments, setInstruments] = useState<InstrumentKey[]>(['guitar']);
   const [instrumentError, setInstrumentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!fromStudio) return;
+    const preset = readStudioInstrumentsForUpload();
+    if (preset?.length) {
+      setInstruments(preset);
+    }
+  }, [fromStudio]);
 
   async function startProcess(file: File) {
     if (!instruments.length) {
@@ -355,6 +374,9 @@ export function UploadScreen() {
   }
 
   function onDone() {
+    if (fromStudio) {
+      clearStudioInstrumentsForUpload();
+    }
     if (songId) {
       router.push(`/instrument?songId=${encodeURIComponent(songId)}`);
       return;
@@ -413,6 +435,7 @@ export function UploadScreen() {
         if (next.length) setInstrumentError(null);
       }}
       instrumentError={instrumentError}
+      fromStudio={fromStudio}
     />
   );
 }

@@ -253,7 +253,7 @@ export function JoinScreen({ token }: JoinScreenProps) {
           <p style={{ color: 'var(--danger, #f87171)', fontSize: 13, marginBottom: 12 }}>{submitError}</p>
         )}
 
-        <LoadingButton type="submit" className="btn btn-primary btn-block" loading={submitting}>
+        <LoadingButton type="submit" variant="default" className="w-full" loading={submitting}>
           {t('room.joinAs')}
         </LoadingButton>
       </form>

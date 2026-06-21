@@ -24,6 +24,18 @@ export function shouldRedirectToProfilePending(profile: Profile | null): boolean
   );
 }
 
+export function shouldRedirectToStudio(profile: Profile | null): boolean {
+  if (!profile) return false;
+  if (shouldRedirectToProfilePending(profile)) return false;
+  return profile.studio_onboarding_seen_at == null;
+}
+
+export function getPostAuthRedirect(profile: Profile | null): string {
+  if (shouldRedirectToProfilePending(profile)) return '/profile';
+  if (shouldRedirectToStudio(profile)) return '/studio';
+  return '/dashboard';
+}
+
 export function normalizePlan(value: string | null | undefined): PlanId {
   if (value === 'pro' || value === 'banda') return value;
   return 'free';

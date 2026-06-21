@@ -157,7 +157,11 @@ body {
   flex-shrink:0;
 }
 .classic-loader--md{ width:40px; height:40px; }
-.classic-loader--sm{ width:18px; height:18px; border-width:2px; }
+.classic-loader--sm{ width:16px; height:16px; border-width:2px; }
+.classic-loader--on-primary{
+  border-color:rgba(4,18,31,0.22);
+  border-top-color:var(--acc-ink);
+}
 @keyframes classic-loader-spin{ to { transform:rotate(360deg); } }
 
 .loader-center{

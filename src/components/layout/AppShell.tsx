@@ -46,6 +46,8 @@ export function AppShell({ user, profile, isAdmin = false, children }: AppShellP
     );
   }
 
+  const isStudioPage = pathname === '/studio';
+
   const displayName =
     profile?.full_name?.trim() ||
     user.user_metadata?.full_name?.trim() ||
@@ -61,9 +63,9 @@ export function AppShell({ user, profile, isAdmin = false, children }: AppShellP
 
   return (
     <SessionProvider user={user} profile={profile} isAdmin={isAdmin}>
-      <AppNav user={navUser} plan={plan} isAdmin={isAdmin} />
-      {!isAdmin && plan === 'free' && pathname !== '/profile' && <UpgradeBanner />}
-      <main style={{ minHeight: 'calc(100vh - 68px)', background: 'var(--surface)' }}>
+      {!isStudioPage && <AppNav user={navUser} plan={plan} isAdmin={isAdmin} />}
+      {!isAdmin && plan === 'free' && pathname !== '/profile' && !isStudioPage && <UpgradeBanner />}
+      <main style={{ minHeight: isStudioPage ? '100vh' : 'calc(100vh - 68px)', background: isStudioPage ? 'transparent' : 'var(--surface)' }}>
         {children}
       </main>
     </SessionProvider>

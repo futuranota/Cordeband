@@ -92,7 +92,9 @@ export function ForgotPasswordForm() {
 
           <LoadingButton
             type="submit"
-            className="btn btn-primary btn-block btn-lg"
+            variant="default"
+            size="lg"
+            className="w-full"
             loading={loading}
             disabled={!valid}
             style={{ marginTop: 8 }}

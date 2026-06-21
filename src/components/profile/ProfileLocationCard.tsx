@@ -118,7 +118,8 @@ export function ProfileLocationCard({
       {error && <p style={{ color: '#ef4444', fontSize: 13, marginTop: 12 }}>{error}</p>}
       <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
         <LoadingButton
-          className="btn btn-primary btn-sm"
+          variant="default"
+          size="sm"
           loading={saving}
           disabled={!locationValid}
           onClick={() => void saveLocation()}
@@ -127,7 +128,8 @@ export function ProfileLocationCard({
         </LoadingButton>
         <LoadingButton
           type="button"
-          className="btn btn-ghost btn-sm"
+          variant="outline"
+          size="sm"
           loading={geoLoading}
           onClick={() => void useMyLocation()}
         >

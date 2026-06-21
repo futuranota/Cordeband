@@ -226,7 +226,7 @@ export function AdminScreen() {
               </div>
             </div>
             {err && <p style={{ color: '#ef4444', fontSize: 13, margin: 0 }}>{err}</p>}
-            <LoadingButton className="btn btn-primary btn-block" type="submit" loading={loginLoading}>
+            <LoadingButton variant="default" className="w-full" type="submit" loading={loginLoading}>
               {t('admin.login')}
             </LoadingButton>
           </form>
@@ -425,7 +425,8 @@ export function AdminScreen() {
                       {f.published ? t('admin.published') : t('admin.hidden')}
                     </span>
                     <LoadingButton
-                      className="btn btn-ghost btn-sm"
+                      variant="outline"
+                      size="sm"
                       loading={featBusyId === f.id}
                       disabled={f.status !== 'ready'}
                       onClick={() => void toggleFeatPublish(f)}
@@ -433,9 +434,9 @@ export function AdminScreen() {
                       {f.published ? t('admin.hide') : t('admin.publish')}
                     </LoadingButton>
                     <LoadingButton
-                      className="iconbtn"
+                      variant="outline"
+                      size="icon"
                       loading={featBusyId === f.id}
-                      loaderSize="sm"
                       onClick={() => void deleteFeat(f.id)}
                       aria-label={t('admin.featDeleteConfirm')}
                     >

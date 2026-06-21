@@ -86,7 +86,8 @@ export function ConfirmDialog({
           </button>
           <LoadingButton
             type="button"
-            className={`btn${danger ? ' cancel-confirm' : ' btn-primary'}`}
+            variant={danger ? 'destructive' : 'default'}
+            size="sm"
             loading={loading}
             onClick={onConfirm}
           >

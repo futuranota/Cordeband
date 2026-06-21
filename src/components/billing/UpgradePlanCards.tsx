@@ -95,7 +95,8 @@ export function UpgradePlanCards({ userId, selected, onSelect }: UpgradePlanCard
             </ul>
             <LoadingButton
               type="button"
-              className={`btn btn-block${popular ? ' btn-primary' : ' btn-ghost'}`}
+              variant={popular ? 'default' : 'outline'}
+              className="w-full"
               loading={isLoading}
               onClick={() => pick(plan)}
             >

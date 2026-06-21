@@ -68,7 +68,8 @@ export function CancelMembershipPanel({ userId, plan }: CancelMembershipPanelPro
                 </button>
                 <LoadingButton
                   type="button"
-                  className="btn cancel-confirm"
+                  variant="destructive"
+                  size="sm"
                   loading={confirming}
                   onClick={confirmCancel}
                 >

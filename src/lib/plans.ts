@@ -9,6 +9,13 @@ export const PLAN_SONG_LIMIT: Record<PlanId, number> = {
   banda: 15,
 };
 
+/** Créditos Studio incluidos por plan (barra lateral). */
+export const PLAN_STUDIO_CREDITS: Record<PlanId, number> = {
+  free: 1,
+  pro: 15,
+  banda: 15,
+};
+
 export const PLAN_MONTHLY_USD: Record<Exclude<PlanId, 'free'>, number> = {
   pro: 12.99,
   banda: 24.99,

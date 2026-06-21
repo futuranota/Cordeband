@@ -1,29 +1,21 @@
 'use client';
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import { ClassicLoader } from '@/components/ui/ClassicLoader';
+import type { ReactNode } from 'react';
+import { Button, type ButtonProps } from '@/components/ui/button';
 
-export type LoadingButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+export type LoadingButtonProps = ButtonProps & {
   loading?: boolean;
-  loaderSize?: 'sm' | 'md';
   children: ReactNode;
 };
 
 export function LoadingButton({
   loading = false,
-  loaderSize = 'sm',
   children,
-  className = '',
-  disabled,
   ...rest
 }: LoadingButtonProps) {
   return (
-    <button
-      {...rest}
-      disabled={disabled || loading}
-      className={[className, loading ? 'is-loading' : ''].filter(Boolean).join(' ') || undefined}
-    >
-      {loading ? <ClassicLoader size={loaderSize} /> : children}
-    </button>
+    <Button loading={loading} {...rest}>
+      {children}
+    </Button>
   );
 }

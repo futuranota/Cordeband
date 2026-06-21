@@ -51,6 +51,7 @@ export function AppNav({ user, plan, isAdmin = false }: { user: User; plan: Plan
 
   const links = [
     { href: '/dashboard', label: t('nav.library') },
+    { href: '/studio', label: t('nav.studio') },
     { href: practiceHref, label: t('nav.practice') },
     ...(plan === 'banda' ? [{ href: '/band', label: t('nav.band') }] : []),
     { href: '/upload', label: t('nav.add') },

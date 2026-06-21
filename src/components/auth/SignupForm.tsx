@@ -7,7 +7,7 @@ import { useT } from '@/i18n/context';
 import { IconCheck, IconEye, IconEyeOff, IconArrow, IconArrowL, IconNote } from '@/components/ui/icons';
 import { LoadingButton } from '@/components/ui/LoadingButton';
 import { createClient } from '@/lib/supabase/client';
-import { getProfile, shouldRedirectToProfilePending } from '@/lib/supabase/profile';
+import { getProfile, getPostAuthRedirect, shouldRedirectToProfilePending } from '@/lib/supabase/profile';
 import {
   parsePlanParam,
   isPaidPlan,
@@ -83,11 +83,7 @@ export function SignupForm({ mode }: { mode: Mode }) {
       return;
     }
     const profile = await getProfile(supabase, user.id);
-    if (shouldRedirectToProfilePending(profile)) {
-      router.push('/profile');
-      return;
-    }
-    router.push('/dashboard');
+    router.push(getPostAuthRedirect(profile));
     router.refresh();
   }
 
@@ -287,7 +283,8 @@ export function SignupForm({ mode }: { mode: Mode }) {
 
               <LoadingButton
                 type="button"
-                className="btn btn-ghost btn-block"
+                variant="outline"
+                className="w-full"
                 loading={geoLoading}
                 disabled={loading}
                 onClick={() => void handleUseLocation()}
@@ -424,7 +421,9 @@ export function SignupForm({ mode }: { mode: Mode }) {
             <div className="auth-location-actions">
               <LoadingButton
                 type="submit"
-                className="btn btn-primary btn-block btn-lg"
+                variant="default"
+                size="lg"
+                className="w-full"
                 loading={loading}
                 disabled={!locationValid}
               >
@@ -435,7 +434,9 @@ export function SignupForm({ mode }: { mode: Mode }) {
             <>
               <LoadingButton
                 type="submit"
-                className="btn btn-primary btn-block btn-lg"
+                variant="default"
+                size="lg"
+                className="w-full"
                 loading={loading}
                 disabled={!valid}
                 style={{ marginTop: 8 }}
@@ -450,7 +451,8 @@ export function SignupForm({ mode }: { mode: Mode }) {
                   <div className="auth-oauth">
                     <LoadingButton
                       type="button"
-                      className="btn btn-ghost btn-block"
+                      variant="outline"
+                      className="w-full"
                       loading={oauthLoading}
                       disabled={loading || oauthLoading}
                       onClick={() => handleOAuth('google')}

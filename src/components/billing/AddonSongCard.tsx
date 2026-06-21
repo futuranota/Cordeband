@@ -50,7 +50,7 @@ export function AddonSongCard({ used, total }: AddonSongCardProps) {
           <button type="button" className="iconbtn" onClick={() => setQty((q) => q + 1)}>+</button>
           <span className="muted" style={{ fontSize: 13 }}>{qty === 1 ? t('addon.song') : t('addon.songs')}</span>
         </div>
-        <LoadingButton type="button" className="btn btn-primary" loading={loading} onClick={buy}>
+        <LoadingButton type="button" variant="default" loading={loading} onClick={buy}>
           <IconPlus size={15} />
           {t('addon.cta')} · {ADDON_SONG_PRICE}
           {qty > 1 ? ` × ${qty}` : ''}

@@ -287,7 +287,7 @@ export function FeaturedSongForm({ onSaved, onCancel }: Props) {
       </div>
       {error && <p style={{ color: '#ef4444', fontSize: 13, margin: '14px 0 0' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-        <LoadingButton className="btn btn-primary btn-sm" type="submit" loading={submitting}>
+        <LoadingButton variant="default" size="sm" type="submit" loading={submitting}>
           {t('admin.featProcessSave')}
         </LoadingButton>
         <button className="btn btn-ghost btn-sm" type="button" onClick={onCancel} disabled={submitting}>

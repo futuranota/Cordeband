@@ -7,6 +7,9 @@ export type Profile = {
   plan: PlanId;
   intended_plan: PlanId | null;
   songs_used_this_month: number;
+  credits_remaining: number;
+  credits_reset_at: string | null;
+  studio_onboarding_seen_at: string | null;
   stripe_customer_id: string | null;
   address_line: string | null;
   city: string | null;

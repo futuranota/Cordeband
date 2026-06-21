@@ -125,7 +125,7 @@ export function FunnelTable() {
             ))}
           </select>
         </div>
-        <LoadingButton className="btn btn-primary btn-sm" type="submit" loading={loading}>
+        <LoadingButton variant="default" size="sm" type="submit" loading={loading}>
           {t('admin.funnel.apply')}
         </LoadingButton>
       </form>

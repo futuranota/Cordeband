@@ -86,7 +86,8 @@ export function ProfileScreen() {
               </div>
               <LoadingButton
                 type="button"
-                className="btn btn-primary btn-sm"
+                variant="default"
+                size="sm"
                 loading={checkoutLoading}
                 onClick={completePayment}
               >

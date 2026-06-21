@@ -293,7 +293,7 @@ export function BusinessAdminPanel() {
           </label>
           {error && <p style={{ color: '#ef4444', fontSize: 13, marginTop: 12 }}>{error}</p>}
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <LoadingButton className="btn btn-primary btn-sm" loading={saving} onClick={() => void saveBusiness()}>
+            <LoadingButton variant="default" size="sm" loading={saving} onClick={() => void saveBusiness()}>
               {editBusiness ? t('admin.saveEdit') : t('admin.save')}
             </LoadingButton>
             <button type="button" className="btn btn-ghost btn-sm" onClick={closeForm}>{t('admin.cancel')}</button>
@@ -333,17 +333,17 @@ export function BusinessAdminPanel() {
                 <IconEdit size={15} />
               </button>
               <LoadingButton
-                className="iconbtn"
+                variant="outline"
+                size="icon"
                 loading={busyId === biz.id}
-                loaderSize="sm"
                 onClick={() => void toggleActive(biz)}
               >
                 <span style={{ fontSize: 11, fontWeight: 700 }}>{biz.active ? 'OFF' : 'ON'}</span>
               </LoadingButton>
               <LoadingButton
-                className="iconbtn"
+                variant="outline"
+                size="icon"
                 loading={busyId === biz.id}
-                loaderSize="sm"
                 onClick={() => void deleteBusiness(biz.id)}
               >
                 <IconTrash size={15} />
