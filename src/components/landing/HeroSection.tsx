@@ -3,30 +3,7 @@
 import Link from 'next/link';
 import { useT } from '@/i18n/context';
 import { IconSpark, IconCheck, IconPause } from '@/components/ui/icons';
-
-const DEMO_NOTES = [
-  { x: 42, y: 64 }, { x: 74, y: 52 }, { x: 104, y: 40 }, { x: 138, y: 58 },
-  { x: 176, y: 46 }, { x: 212, y: 64 }, { x: 250, y: 34 }, { x: 286, y: 52 }, { x: 322, y: 58 },
-];
-
-function DemoStaff() {
-  return (
-    <svg viewBox="0 0 360 150" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <line key={i} x1="14" x2="346" y1={40 + i * 15} y2={40 + i * 15} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
-      ))}
-      <text x="20" y="74" fontFamily="Georgia, serif" fontSize="40" fill="#cfcfcf" opacity="0.85">𝄞</text>
-      {DEMO_NOTES.map((n) => (
-        <g key={n.x}>
-          <ellipse cx={n.x} cy={n.y} rx="6.4" ry="4.8" fill="#cfcfcf" transform={`rotate(-18 ${n.x} ${n.y})`} />
-          <line x1={n.x + 6} x2={n.x + 6} y1={n.y} y2={n.y - 26} stroke="#cfcfcf" strokeWidth="1.4" />
-        </g>
-      ))}
-      <line x1="150" x2="150" y1="24" y2="126" stroke="rgb(142, 173, 210)" strokeWidth="2" />
-      <circle cx="150" cy="24" r="4" fill="rgb(204, 249, 255)" />
-    </svg>
-  );
-}
+import { MusicalStaffDemo } from '@/components/landing/MusicalStaffDemo';
 
 export function HeroSection() {
   const { t } = useT();
@@ -91,7 +68,7 @@ export function HeroSection() {
             </div>
 
             <div className="demo-staff">
-              <DemoStaff />
+              <MusicalStaffDemo showCursor />
             </div>
 
             <div className="demo-bar">

@@ -7,6 +7,7 @@ import { HeroSection } from '@/components/landing/HeroSection';
 import { HowSection } from '@/components/landing/HowSection';
 import { BandShareSection } from '@/components/landing/BandShareSection';
 import { InstrumentsSection } from '@/components/landing/InstrumentsSection';
+import { StemPreviewSection } from '@/components/landing/StemPreviewSection';
 
 export default function HomePage() {
   return (
@@ -31,6 +32,9 @@ export default function HomePage() {
 
       {/* Instruments */}
       <InstrumentsSection />
+
+      {/* Stem demo */}
+      <StemPreviewSection />
 
       {/* Pricing */}
       <PricingSection />

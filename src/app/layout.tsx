@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Sora, Manrope } from 'next/font/google';
 import './globals.css';
+import './app-flow.css';
 import { LangProvider } from '@/i18n/context';
 
 const sora = Sora({ subsets: ['latin'], variable: '--font-sora', display: 'swap' });
