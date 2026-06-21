@@ -5,13 +5,25 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
-import { INST_ORDER, INSTRUMENTS, LIBRARY, type InstrumentKey } from '@/lib/data';
+import { INST_ORDER, INSTRUMENTS, type InstrumentKey } from '@/lib/data';
+import {
+  saveActiveSongId,
+  saveInstrumentConfirmedFor,
+} from '@/lib/supabase/fetch-song';
 import { IconArrowL, IconBand } from '@/components/ui/icons';
 import { ClassicLoader } from '@/components/ui/ClassicLoader';
 import { LoadingButton } from '@/components/ui/LoadingButton';
 
+type JoinLookupSong = {
+  id: string;
+  title: string;
+  artist: string;
+  glyph: string;
+};
+
 type JoinLookup = {
   room: { id: string; code: string; status: string; songId: string | null };
+  song: JoinLookupSong | null;
   takenInstruments: InstrumentKey[];
 };
 
@@ -89,6 +101,7 @@ export function JoinScreen({ token }: JoinScreenProps) {
           code: lookup.room.code,
           instrument,
           guestName: trimmed,
+          forceInstrumentUpdate: true,
         }),
       });
 
@@ -101,7 +114,19 @@ export function JoinScreen({ token }: JoinScreenProps) {
         throw new Error(msg);
       }
 
-      router.push(`/player?room=${lookup.room.id}`);
+      const songId = lookup.room.songId ?? lookup.song?.id ?? null;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cordeband_instrument', instrument);
+        if (songId) {
+          saveActiveSongId(songId);
+          saveInstrumentConfirmedFor(songId);
+        }
+      }
+
+      const playerUrl = songId
+        ? `/player?room=${lookup.room.id}&songId=${encodeURIComponent(songId)}`
+        : `/player?room=${lookup.room.id}`;
+      router.push(playerUrl);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : t('bandJoin.joinError'));
     } finally {
@@ -141,7 +166,7 @@ export function JoinScreen({ token }: JoinScreenProps) {
     );
   }
 
-  const song = LIBRARY[0];
+  const song = lookup.song;
 
   return (
     <div className="wrap page" style={{ paddingTop: 48, paddingBottom: 80, maxWidth: 520 }}>
@@ -164,16 +189,20 @@ export function JoinScreen({ token }: JoinScreenProps) {
         <p style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 800, color: 'var(--acc)', margin: '0 0 16px' }}>
           {lookup.room.code}
         </p>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 8, background: 'var(--acc-soft)',
-            border: '1px solid var(--acc-line)', display: 'grid', placeItems: 'center', fontSize: 18,
-          }}>{song.glyph}</div>
-          <div>
-            <p style={{ margin: 0, fontWeight: 700 }}>{song.title}</p>
-            <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>{song.artist}</p>
+        {song ? (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 8, background: 'var(--acc-soft)',
+              border: '1px solid var(--acc-line)', display: 'grid', placeItems: 'center', fontSize: 18,
+            }}>{song.glyph}</div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700 }}>{song.title}</p>
+              <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>{song.artist}</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="muted" style={{ fontSize: 13, margin: 0 }}>{t('room.noSongSelected')}</p>
+        )}
       </div>
 
       <form className="card" style={{ padding: 24 }} onSubmit={handleJoin}>

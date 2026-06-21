@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SCORE, type ScoreNote } from '@/lib/data';
 import { IconSpark } from '@/components/ui/icons';
+import { isNoteActive, isNotePlayed } from '@/lib/active-note'; // NUEVO
 
 const PPB = 56;
 const LEFT = 92;
@@ -25,15 +26,49 @@ function barBeats(scoreTotal: number): number[] {
   return bars;
 }
 
+// ── Helpers de activación — usan curTimeSec si existe, beats como fallback ──
+
+function resolveActive(
+  n: ScoreNote,
+  curBeat: number,
+  curTimeSec: number | undefined,
+  bpm: number,
+): boolean {
+  if (curTimeSec != null && curTimeSec > 0) {
+    return isNoteActive(n, curTimeSec, bpm); // NUEVO: usa segundos reales
+  }
+  // fallback: comportamiento anterior por beats
+  return curBeat >= n.beat && curBeat < n.beat + n.dur;
+}
+
+function resolvePlayed(
+  n: ScoreNote,
+  curBeat: number,
+  curTimeSec: number | undefined,
+  bpm: number,
+): boolean {
+  if (curTimeSec != null && curTimeSec > 0) {
+    return isNotePlayed(n, curTimeSec, bpm); // NUEVO: usa segundos reales
+  }
+  // fallback: comportamiento anterior por beats
+  return n.beat + n.dur <= curBeat;
+}
+
+// ── Sub-views ────────────────────────────────────────────────────────────────
+
 function StaffView({
   notes,
   totalWidth,
   curBeat,
+  curTimeSec, // NUEVO
+  bpm,        // NUEVO
   scoreTotal,
 }: {
   notes: ScoreNote[];
   totalWidth: number;
   curBeat: number;
+  curTimeSec?: number; // NUEVO
+  bpm: number;         // NUEVO
   scoreTotal: number;
 }) {
   const bars = barBeats(scoreTotal);
@@ -49,8 +84,9 @@ function StaffView({
       {notes.map((n, i) => {
         const x = xAt(n.beat);
         const y = yAt(n.s);
-        const played = n.beat + n.dur <= curBeat;
-        const active = curBeat >= n.beat && curBeat < n.beat + n.dur;
+        // NUEVO: usa curTimeSec si está disponible, beats como fallback
+        const played = resolvePlayed(n, curBeat, curTimeSec, bpm);
+        const active = resolveActive(n, curBeat, curTimeSec, bpm);
         const open = n.dur >= 2;
         const eighth = n.dur < 1;
         const stemUp = n.s < 4;
@@ -94,11 +130,15 @@ function TabView({
   notes,
   totalWidth,
   curBeat,
+  curTimeSec, // NUEVO
+  bpm,        // NUEVO
   scoreTotal,
 }: {
   notes: ScoreNote[];
   totalWidth: number;
   curBeat: number;
+  curTimeSec?: number; // NUEVO
+  bpm: number;         // NUEVO
   scoreTotal: number;
 }) {
   const tTop = 70;
@@ -117,8 +157,9 @@ function TabView({
       {notes.map((n, i) => {
         const x = xAt(n.beat);
         const y = yStr(n.tab.string);
-        const played = n.beat + n.dur <= curBeat;
-        const active = curBeat >= n.beat && curBeat < n.beat + n.dur;
+        // NUEVO
+        const played = resolvePlayed(n, curBeat, curTimeSec, bpm);
+        const active = resolveActive(n, curBeat, curTimeSec, bpm);
         const op = active ? 1 : played ? 0.28 : 0.9;
         return (
           <g key={i} opacity={op} style={{ transition: 'opacity .12s linear' }}>
@@ -137,11 +178,15 @@ function RollView({
   notes,
   totalWidth,
   curBeat,
+  curTimeSec, // NUEVO
+  bpm,        // NUEVO
   scoreTotal,
 }: {
   notes: ScoreNote[];
   totalWidth: number;
   curBeat: number;
+  curTimeSec?: number; // NUEVO
+  bpm: number;         // NUEVO
   scoreTotal: number;
 }) {
   const midis = notes.map((n) => n.midi);
@@ -169,8 +214,9 @@ function RollView({
         const x = xAt(n.beat);
         const y = yMidi(n.midi);
         const w = Math.max(10, n.dur * PPB - 4);
-        const played = n.beat + n.dur <= curBeat;
-        const active = curBeat >= n.beat && curBeat < n.beat + n.dur;
+        // NUEVO
+        const played = resolvePlayed(n, curBeat, curTimeSec, bpm);
+        const active = resolveActive(n, curBeat, curTimeSec, bpm);
         const fill = active ? 'var(--acc)' : played ? 'rgba(207,207,207,.3)' : 'rgba(207,207,207,.8)';
         return (
           <rect key={i} x={x} y={y + 1.5} width={w} height={laneH - 3} rx="3" fill={fill} style={{ transition: 'fill .12s linear' }} />
@@ -210,6 +256,8 @@ function LeftPanel({ view }: { view: string }) {
 type SheetViewerProps = {
   view: 'staff' | 'tab' | 'roll';
   curBeat: number;
+  curTimeSec?: number; // NUEVO — opcional para retrocompatibilidad
+  bpm?: number;        // NUEVO — opcional, default 120
   loop?: { a: number; b: number } | null;
   loading?: boolean;
   waiting?: boolean;
@@ -222,6 +270,8 @@ type SheetViewerProps = {
 export function SheetViewer({
   view,
   curBeat,
+  curTimeSec,       // NUEVO
+  bpm = 120,        // NUEVO — default seguro
   loop,
   loading,
   waiting,
@@ -250,10 +300,13 @@ export function SheetViewer({
   const cursorX = Math.max(150, Math.min(340, vw * 0.30));
   const translate = cursorX - xAt(curBeat);
 
+  // NUEVO: props comunes a todos los sub-views
   const viewProps = {
     notes: scoreNotes,
     totalWidth,
     curBeat,
+    curTimeSec, // NUEVO
+    bpm,        // NUEVO
     scoreTotal: displayTotal,
   };
 

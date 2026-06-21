@@ -5,7 +5,6 @@ import sys
 import tempfile
 import wave
 from pathlib import Path
-
 from config import (
     DEFAULT_BPM,
     DEMUCS_STEMS,
@@ -14,6 +13,7 @@ from config import (
 )
 from supabase_client import (
     clear_existing_stems,
+    confidence_avg_from_notes,
     download_original,
     fetch_song,
     finalize_song,
@@ -154,7 +154,16 @@ def process_song(song_id: str, storage_path: str, job_id: str, _instrument_hint:
                 update_job(client, job_id, progress_pct=PROGRESS_STEPS[4])
                 notes = transcribe_stem(wav_path, inst, float(bpm))
                 if notes:
-                    insert_note_sequence(client, song_id, stem_id, inst, notes, None)
+                    insert_note_sequence(
+                        client,
+                        song_id,
+                        stem_id,
+                        inst,
+                        notes,
+                        None,
+                        source="ai_basic_pitch",
+                        confidence_avg=confidence_avg_from_notes(notes),
+                    )
 
             expires = None if is_featured else stems_expires_at_iso(STEMS_TTL_HOURS)
             finalize_song(

@@ -10,7 +10,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { instrument?: string; songId?: string | null; roomId?: string; code?: string; guestName?: string } = {};
+  let body: {
+    instrument?: string;
+    songId?: string | null;
+    roomId?: string;
+    code?: string;
+    guestName?: string;
+    forceInstrumentUpdate?: boolean;
+  } = {};
   try {
     body = await request.json();
   } catch {
@@ -27,6 +34,7 @@ export async function POST(request: Request) {
       roomId: body.roomId ?? null,
       code: body.code ?? null,
       guestName: body.guestName ?? null,
+      forceInstrumentUpdate: body.forceInstrumentUpdate ?? false,
     });
     return NextResponse.json(session);
   } catch (err) {

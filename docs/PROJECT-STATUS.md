@@ -1,7 +1,7 @@
 # Cordeband / Instrumently — Estado del proyecto
 
 > **Documento para sincronizar agentes** (Cursor, Claude, etc.)  
-> **Última actualización:** 16 jun 2026  
+> **Última actualización:** 20 jun 2026  
 > **Repo:** `/Users/r/Downloads/Coderband` · rama `main`  
 > **Dominio producción:** `https://cordeband.site` (ver `docs/supabase-auth-urls.md`)
 
@@ -18,7 +18,7 @@ App web para músicos: subes un MP3, la app separa stems (Demucs), transcribe no
 | Capa | Plan | Estado en código |
 |------|------|------------------|
 | Práctica solo | Free / Pro | **Mayormente implementada** (upload → procesamiento → player) |
-| Sala de banda en tiempo real | Banda ($24.99/mes) | **Parcial** (API + Realtime + sync; UI aún con mocks) |
+| Sala de banda en tiempo real | Banda ($24.99/mes) | **Implementada v1** (songId real, dashboard, audio sync; QA 2 browsers pendiente en prod) |
 | Portal de creador | Beta | **Fuera de scope v1** — no construir |
 
 **Briefs de referencia:** `memoria.md` (Design Brief + Tech Brief + precios)  
@@ -48,7 +48,7 @@ App web para músicos: subes un MP3, la app separa stems (Demucs), transcribe no
 
 ## 3. Estructura del repo
 
-```
+
 Coderband/
 ├── src/
 │   ├── app/                    # Rutas App Router
@@ -205,12 +205,12 @@ Definidos en `src/lib/plans.ts`:
 | Login | `/login` | ✅ | Supabase email/password + Google OAuth button |
 | Signup | `/signup` | ✅ | 2 pasos: datos + ubicación (city/postal). Google OAuth. Email confirm flow |
 | Forgot/Reset password | `/forgot-password`, `/reset-password` | ✅ | Flow completo vía `/auth/callback?next=/reset-password` |
-| Dashboard | `/dashboard` | 🟡 | Fetch real: `fetchUserLibrarySongs()` + `fetchPublishedCatalogSongs()`. Sección **"Mis Bandas" es mock** (demo members hardcodeados) |
+| Dashboard | `/dashboard` | 🟡 | Fetch real: biblioteca + destacadas. **Mis Bandas:** salas reales desde `band_rooms` + roster |
 | Upload | `/upload` | ✅ | Upload real a Storage + job + Realtime/polling. Límite 50 MB. InstrumentPicker pre-upload |
 | Instrument selector | `/instrument` | 🟡 | Fetch real con `?songId=`. Sin songId → demo `LIBRARY[0]`. Free plan no restringe instrumentos |
-| Player | `/player` | 🟡 | Demo sin auth (`LIBRARY[0]` + SCORE mock). Con auth: audio real (`usePlayerAudio`), alphaTab si `score.fromDb`, band mode con Realtime. Afiliados: **localStorage/mock** |
-| Band | `/band` | 🟡 | API real para crear sala, pero **`songId: LIBRARY[0]` hardcodeado**. Plan Banda required |
-| Join (invitado) | `/join/[token]` | ✅ | Lookup API + anonymous auth + join |
+| Player | `/player` | 🟡 | Demo sin auth. Con auth: audio real, partitura desde `note_sequences`, **turnos "tu turno/espera" derivados de notas transcritas en solo** (si `score.fromDb`). Banda sigue con schedule demo |
+| Band | `/band` | ✅ | Picker biblioteca+destacadas (ready), songId UUID real, Realtime lobby, link join |
+| Join (invitado) | `/join/[token]` | ✅ | Lookup API + canción real + anonymous auth + join |
 | Profile | `/profile` | 🟡 | Lee profile real. Upgrade/cancel/add-on UI sin Stripe |
 | Admin | `/admin` | 🟡 | Login Supabase + check admin vía API. **Destacadas: real.** **Afiliados: localStorage** (`loadAdminAffiliates`) |
 
@@ -252,24 +252,41 @@ Ver `services/audio-processor/README.md` y `docs/RAILWAY-DEPLOY.md`.
 ```
 /player?songId=uuid
   → fetchSongById + fetchSongScore(instrument)
-  → usePlayerAudio: fetch stems signed URLs → Web Audio API
-  → instrument seleccionado → gain = 0 (mute)
+  → usePlayerAudio: stems signed URLs → Web Audio API
+  → instrument seleccionado → gain = 0 (mute) en tu stem
   → AlphaTabViewer si score.fromDb (notesToAlphaTex)
-  → fallback SheetViewer mock si no hay notas reales
+  → windowsFromNotes(score.notes) → ventanas "tu turno"
+  → TurnBanner: waiting / ready / live según gaps reales entre notas
+  → SheetViewer overlay "Esperando tu parte…" fuera de tus ventanas
 ```
+
+**Gap default:** 2 beats de silencio entre clusters de notas = nuevo segmento.
 
 ### 9.4 Sala de banda
 
 ```
-Host plan banda → POST /api/band-rooms
+Host plan banda → /band → picker canción (biblioteca + destacadas, status=ready)
+  → POST /api/band-rooms { songId: UUID, instrument }
   → Supabase Realtime canal band_room:{id}
+  → Invitado: /join/{code} → lookup con metadatos de canción → join
+  → /player?room={id}&songId={uuid}
+  → songId resuelto desde band_rooms.song_id (prioridad sobre localStorage)
+  → RLS: user_can_read_song incluye miembros de sala activa (migración add_band_song_access.sql)
   → PATCH /api/band-rooms/{id}/play { action: 'play' }
-  → play_started_at del servidor
-  → useBandSync calcula beat offset en cada browser
-  → useBandRoom fallback a demo si API falla
+  → play_started_at del servidor → useBandSync → useBandAudioFollow (stems reales en sync)
+  → useBandRoom fallback a demo si API/Realtime falla
 ```
 
-**Pendiente:** conectar songId real (no mock), sync de audio de banda con stems reales en todos los browsers, listar salas reales en dashboard.
+**QA manual 2 browsers (pendiente verificar en prod):**
+1. Host (plan banda) crea sala con canción ready → copia link join
+2. Guest abre `/join/{code}` → ve canción real → elige instrumento distinto
+3. Ambos en player: roster Realtime con instrumentos correctos
+4. Host Play → pre-roll 3s → mismo beat en ambos
+5. Audio stems en ambos browsers
+6. Host Pause → ambos paran
+7. Dashboard host muestra sala con roster/estado real
+
+**Precondiciones prod:** aplicar `supabase/migrations/add_band_song_access.sql`, Realtime ON en `band_rooms`/`band_members`.
 
 ### 9.5 Admin — canciones destacadas
 
@@ -311,6 +328,10 @@ Host plan banda → POST /api/band-rooms
 | `src/lib/alphatab/notes-to-alphatex.ts` | JSONB → alphaTex |
 | `src/hooks/useBandRoom.ts` | Realtime lobby |
 | `src/hooks/useBandSync.ts` | Sync beat desde play_started_at |
+| `src/hooks/useBandAudioFollow.ts` | Audio stems sigue play_started_at en banda live |
+| `src/lib/supabase/fetch-band-rooms.ts` | Salas activas del host (dashboard) |
+| `src/lib/supabase/fetch-band-songs.ts` | Canciones elegibles para sala (ready) |
+| `src/lib/note-turn-schedule.ts` | Ventanas "tu turno" desde notas transcritas (solo) |
 | `src/lib/data.ts` | **Mocks legacy:** LIBRARY, SCORE, DEFAULT_AFFILIATES, getAffiliates() |
 | `src/lib/plans.ts` | Límites y precios |
 | `src/i18n/strings.ts` | Traducciones ES/EN |
@@ -322,6 +343,7 @@ Host plan banda → POST /api/band-rooms
 Vitest configurado (`npm test`). Tests existentes:
 
 - `src/lib/band-sync.test.ts`
+- `src/lib/note-turn-schedule.test.ts`
 - `src/lib/band-schedule.test.ts`
 - `src/lib/band-turn-overlay.test.ts`
 - `src/lib/parse-instruments.test.ts`
@@ -357,8 +379,10 @@ Según `memoria.md`:
 ### 🟠 Importante (v1 incompleto sin esto)
 
 - [ ] **Afiliados en DB:** API admin CRUD + player lee `affiliate_products` (quitar localStorage)
-- [ ] **Band screen:** usar songId real del usuario/catálogo, no `LIBRARY[0]`
-- [ ] **Dashboard bandas:** listar `band_rooms` reales, no demo roster
+- [x] **Band screen:** songId real biblioteca+destacadas, picker, Realtime lobby
+- [x] **Dashboard bandas:** listar `band_rooms` reales con roster
+- [x] **Band audio sync:** stems reales en banda live (`useBandAudioFollow`)
+- [ ] **Verificar banda en prod:** QA 2 browsers + migración RLS aplicada
 - [ ] **Enforce Free plan:** solo guitarra + piano en instrument picker
 - [ ] **Resend:** emails bienvenida, confirmación pago, procesamiento listo
 - [ ] **Middleware /admin:** redirect 404 para no-admin (hoy solo API admin está protegida)

@@ -24,6 +24,7 @@ export async function GET(request: Request) {
         status: result.room.status,
         songId: result.room.song_id,
       },
+      song: result.song,
       takenInstruments,
     });
   } catch (err) {

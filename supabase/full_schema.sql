@@ -135,6 +135,12 @@ create table if not exists public.note_sequences (
   tab_data jsonb,
   time_signature text not null default '4/4',
   key_signature text,
+  source text not null default 'ai_basic_pitch'
+    check (source in (
+      'ai_basic_pitch', 'ai_mt3', 'ai_klang',
+      'user_upload', 'licensed', 'human_verified'
+    )),
+  confidence_avg numeric,
   created_at timestamptz not null default now()
 );
 
@@ -297,13 +303,20 @@ alter table public.song_cache enable row level security;
 alter table public.band_rooms enable row level security;
 alter table public.band_members enable row level security;
 
--- Helper: acceso a canción propia o destacada
+-- Helper: acceso a canción propia, destacada, o en sala de banda activa
 create or replace function public.user_can_read_song(p_song_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from public.songs s
     where s.id = p_song_id
       and (s.user_id = auth.uid() or s.is_featured = true)
+  )
+  or exists (
+    select 1 from public.band_members bm
+    join public.band_rooms br on br.id = bm.room_id
+    where bm.user_id = auth.uid()
+      and br.song_id = p_song_id
+      and br.status != 'ended'
   );
 $$;
 
@@ -321,7 +334,7 @@ create policy "profiles_update_own" on public.profiles
 
 drop policy if exists "songs_select_own_or_featured" on public.songs;
 create policy "songs_select_own_or_featured" on public.songs
-  for select using (auth.uid() = user_id or is_featured = true);
+  for select using (public.user_can_read_song(id));
 
 drop policy if exists "songs_insert_own" on public.songs;
 create policy "songs_insert_own" on public.songs

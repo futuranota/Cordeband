@@ -110,21 +110,38 @@ def insert_note_sequence(
     instrument: str,
     notes: list[dict[str, Any]],
     key_signature: str | None,
+    *,
+    source: str = "ai_basic_pitch",
+    confidence_avg: float | None = None,
 ) -> None:
     tab_data = None
     if instrument in ("guitar", "bass"):
         tab_data = [n.get("tab") for n in notes if n.get("tab")]
 
-    client.table("note_sequences").insert(
-        {
-            "song_id": song_id,
-            "stem_id": stem_id,
-            "instrument_type": instrument,
-            "notes": notes,
-            "tab_data": tab_data,
-            "key_signature": key_signature,
-        }
-    ).execute()
+    row: dict[str, Any] = {
+        "song_id": song_id,
+        "stem_id": stem_id,
+        "instrument_type": instrument,
+        "notes": notes,
+        "tab_data": tab_data,
+        "key_signature": key_signature,
+        "source": source,
+    }
+    if confidence_avg is not None:
+        row["confidence_avg"] = confidence_avg
+
+    client.table("note_sequences").insert(row).execute()
+
+
+def confidence_avg_from_notes(notes: list[dict[str, Any]]) -> float | None:
+    vals = [
+        float(n["confidence"])
+        for n in notes
+        if isinstance(n.get("confidence"), (int, float))
+    ]
+    if not vals:
+        return None
+    return round(sum(vals) / len(vals), 3)
 
 
 def finalize_song(

@@ -13,9 +13,7 @@ export type UsePlayerAudioOptions = {
   enabled: boolean;
   songId: string | null;
   bpm: number;
-  /** Score length in beats (0 when no transcribed score). */
   totalBeats: number;
-  /** Song duration from DB — extends playback past score length. */
   durationSeconds?: number;
   instrument: InstrumentKey;
   vols: Record<string, number>;
@@ -47,7 +45,6 @@ function playbackLimitBeats(
     : 0;
   const fromBuffers = maxBufferSeconds > 0 ? secondsToBeats(maxBufferSeconds, bpm) : 0;
 
-  // Prefer real decoded audio length — score beats in DB can be inflated.
   if (fromBuffers > 0) {
     return Math.max(fromBuffers, fromSong > 0 ? Math.min(fromSong, fromBuffers * 1.02) : 0, 1);
   }
@@ -62,8 +59,10 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
     setAudioError,
     setPlaying,
     setCurBeat,
+    setCurTimeSec, // NUEVO
     playing,
     curBeat,
+    curTimeSec,
     audioReady,
     audioLoading,
     audioError,
@@ -82,6 +81,9 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
   const playbackLimitRef = useRef(1);
   const [playbackLimit, setPlaybackLimit] = useState(1);
   const [loadedStems, setLoadedStems] = useState<InstrumentKey[]>([]);
+
+  // NUEVO: ref para curTimeSec — evita re-render extra, lo leemos en el tick
+  const curTimeSecRef = useRef(0);
 
   const refreshPlaybackLimit = useCallback((maxBufferSeconds = 0) => {
     const { totalBeats, durationSeconds, bpm } = optsRef.current;
@@ -140,7 +142,12 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
 
     playStartCtxRef.current = when;
     startBeatRef.current = fromBeat;
-  }, [stopSources]);
+
+    // NUEVO: sincronizar curTimeSec al hacer seek/play
+    const startTimeSec = beatToSeconds(fromBeat, optsRef.current.bpm);
+    curTimeSecRef.current = startTimeSec;
+    setCurTimeSec(startTimeSec);
+  }, [stopSources, setCurTimeSec]);
 
   const pause = useCallback(() => {
     const ctx = ctxRef.current;
@@ -148,11 +155,16 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
       const elapsed = (ctx.currentTime - playStartCtxRef.current) * optsRef.current.tempo;
       const beat = startBeatRef.current + elapsed * (optsRef.current.bpm / 60);
       setCurBeat(Math.min(beat, playbackLimitRef.current));
+
+      // NUEVO: guardar curTimeSec al pausar
+      const tSec = beatToSeconds(startBeatRef.current, optsRef.current.bpm) + elapsed;
+      curTimeSecRef.current = tSec;
+      setCurTimeSec(tSec);
     }
     stopSources();
     setPlaying(false);
     cancelAnimationFrame(rafRef.current);
-  }, [playing, setCurBeat, setPlaying, stopSources]);
+  }, [playing, setCurBeat, setCurTimeSec, setPlaying, stopSources]);
 
   const play = useCallback(async () => {
     const ctx = ctxRef.current;
@@ -181,8 +193,13 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
     setCurBeat(clamped);
     if (playing) {
       startSources(clamped);
+    } else {
+      // NUEVO: actualizar curTimeSec también al hacer seek en pausa
+      const tSec = beatToSeconds(clamped, optsRef.current.bpm);
+      curTimeSecRef.current = tSec;
+      setCurTimeSec(tSec);
     }
-  }, [playing, setCurBeat, startSources]);
+  }, [playing, setCurBeat, setCurTimeSec, startSources]);
 
   useEffect(() => {
     applyVols();
@@ -282,6 +299,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
     };
   }, [opts.enabled, opts.songId, applyVols, refreshPlaybackLimit, reset, setAudioError, setAudioLoading, setAudioReady, stopSources]);
 
+  // ── RAF tick — actualiza curBeat Y curTimeSec cada frame ──────────────────
   useEffect(() => {
     if (!playing || !audioReady) {
       cancelAnimationFrame(rafRef.current);
@@ -297,33 +315,44 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
       const elapsed = Math.max(0, (ctx.currentTime - playStartCtxRef.current) * tempo);
       let beat = startBeatRef.current + elapsed * (bpm / 60);
 
+      // NUEVO: tiempo real en segundos (independiente del BPM estimado)
+      const startTimeSec = beatToSeconds(startBeatRef.current, bpm);
+      const tSec = startTimeSec + elapsed;
+
       if (loop && beat >= loop.b) {
         beat = loop.a;
         startSources(loop.a);
         setCurBeat(loop.a);
+        // NUEVO: reset curTimeSec al inicio del loop
+        const loopStartSec = beatToSeconds(loop.a, bpm);
+        curTimeSecRef.current = loopStartSec;
+        setCurTimeSec(loopStartSec);
         rafRef.current = requestAnimationFrame(tick);
         return;
       }
 
       if (beat >= limit) {
         setCurBeat(limit);
+        setCurTimeSec(beatToSeconds(limit, bpm)); // NUEVO
         pause();
         return;
       }
 
       setCurBeat(beat);
+      curTimeSecRef.current = tSec;
+      setCurTimeSec(tSec); // NUEVO
       rafRef.current = requestAnimationFrame(tick);
     };
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [playing, audioReady, pause, setCurBeat, startSources]);
+  }, [playing, audioReady, pause, setCurBeat, setCurTimeSec, startSources]);
 
   useEffect(() => {
     if (!playing) return;
     stopSources();
     startSources(usePlayerStore.getState().curBeat);
-  }, [opts.tempo]); // eslint-disable-line react-hooks/exhaustive-deps -- restart on tempo change while playing
+  }, [opts.tempo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     audioReady,
@@ -331,6 +360,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
     audioError,
     playing,
     curBeat,
+    curTimeSec,
     playbackLimitBeats: playbackLimit,
     loadedStems,
     play,

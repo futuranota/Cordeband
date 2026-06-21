@@ -57,11 +57,17 @@ def basic_pitch_events_to_score_notes(
         beat = (start * bpm) / 60.0
         dur = (duration * bpm) / 60.0
         midi = int(pitch)
+        amplitude = float(event[3]) if len(event) > 3 else 0.75
+        confidence = round(min(1.0, max(0.0, amplitude)), 3)
         note: dict[str, Any] = {
+            "startTime": round(start, 4),
+            "endTime": round(end, 4),
             "beat": round(beat, 4),
             "dur": round(dur, 4),
             "midi": midi,
             "s": _staff_pos(midi),
+            "confidence": confidence,
+            "source": "ai_basic_pitch",
         }
         if instrument == "guitar":
             note["tab"] = _midi_to_guitar_tab(midi)

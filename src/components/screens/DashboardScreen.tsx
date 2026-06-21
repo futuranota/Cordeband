@@ -18,6 +18,8 @@ import {
   IconPlus, IconCrown, IconBand, IconUpload, IconCheck,
   IconClock, IconNote, IconSpark, IconPlay, IconTrash,
 } from '@/components/ui/icons';
+import { fetchHostBandRooms, hostBandRoomSong, type HostBandRoom } from '@/lib/supabase/fetch-band-rooms';
+import { memberDisplayName } from '@/lib/band-room';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 function useStemsTick() {
@@ -206,15 +208,27 @@ function FeaturedSection({ items, onOpen }: { items: Song[]; onOpen: (song: Song
   );
 }
 
-function BandsSection({ isBanda }: { isBanda: boolean }) {
+function BandsSection({ isBanda, userId }: { isBanda: boolean; userId: string | undefined }) {
   const { t } = useT();
+  const [rooms, setRooms] = useState<HostBandRoom[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const demoMembers = [
-    { name: t('band.m1'), inst: 'vocals' as const, active: true },
-    { name: t('band.m2'), inst: 'drums' as const, active: true },
-    { name: t('band.m3'), inst: 'bass' as const, active: true },
-    { name: t('band.you'), inst: 'guitar' as const, active: true, leader: true },
-  ];
+  useEffect(() => {
+    if (!isBanda || !userId) {
+      setRooms([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    void fetchHostBandRooms(userId)
+      .then((data) => {
+        if (!cancelled) setRooms(data);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [isBanda, userId]);
 
   return (
     <section className="dash-section">
@@ -232,34 +246,65 @@ function BandsSection({ isBanda }: { isBanda: boolean }) {
       </div>
 
       {isBanda ? (
-        <div className="card band-room">
-          <div className="band-room-glyph"><IconBand size={22} /></div>
-          <div className="band-room-info">
-            <div className="band-room-name">{t('dash.bandRoomName')}</div>
-            <div className="band-room-meta">
-              <span>{demoMembers.length} {t('dash.roomMembers')}</span>
-              <span>·</span>
-              <span className="band-room-state playing">
-                <span className="ping" />
-                {t('dash.roomPlaying')}
-              </span>
-            </div>
-            <div className="band-dash-roster">
-              {demoMembers.map((m) => {
-                const { Icon } = INSTRUMENTS[m.inst];
-                return (
-                  <span key={m.name} className={`band-dash-chip${m.leader ? ' leader' : ''}`}>
-                    <span className="band-dash-avatar">{m.name[0]}</span>
-                    <Icon size={12} sw={1.5} />
-                    {m.name}
-                    {m.leader && <span className="band-leader-tag">{t('room.leaderTag')}</span>}
-                  </span>
-                );
-              })}
-            </div>
+        loading ? (
+          <div className="card bands-empty" style={{ padding: 24 }}>
+            <p className="muted" style={{ margin: 0 }}>{t('bandJoin.loading')}</p>
           </div>
-          <Link href="/player" className="btn btn-primary btn-sm">{t('dash.openRoom')}</Link>
-        </div>
+        ) : rooms.length === 0 ? (
+          <div className="card bands-empty">
+            <span className="empty-ico"><IconBand size={20} /></span>
+            <div className="grow">
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{t('dash.bandsEmptyActive')}</div>
+              <div className="muted" style={{ fontSize: 13, marginTop: 3 }}>{t('dash.bandsEmptyActiveSub')}</div>
+            </div>
+            <Link href="/band" className="btn btn-primary btn-sm">{t('dash.createRoom')}</Link>
+          </div>
+        ) : (
+          rooms.map((room) => {
+            const song = hostBandRoomSong(room);
+            const members = room.band_members ?? [];
+            const isPlaying = room.status === 'playing';
+            const playerHref = room.song_id
+              ? `/player?room=${room.id}&songId=${encodeURIComponent(room.song_id)}`
+              : `/player?room=${room.id}`;
+
+            return (
+              <div key={room.id} className="card band-room" style={{ marginBottom: rooms.length > 1 ? 12 : 0 }}>
+                <div className="band-room-glyph"><IconBand size={22} /></div>
+                <div className="band-room-info">
+                  <div className="band-room-name">
+                    {song ? `${song.title} · ${room.code}` : room.code}
+                  </div>
+                  <div className="band-room-meta">
+                    <span>{members.length} {t('dash.roomMembers')}</span>
+                    <span>·</span>
+                    <span className={`band-room-state${isPlaying ? ' playing' : ''}`}>
+                      {isPlaying && <span className="ping" />}
+                      {isPlaying ? t('dash.roomPlaying') : t('dash.roomWaiting')}
+                    </span>
+                  </div>
+                  {members.length > 0 && (
+                    <div className="band-dash-roster">
+                      {members.map((m) => {
+                        const { Icon } = INSTRUMENTS[m.instrument];
+                        const leader = m.is_leader || m.user_id === room.host_id;
+                        return (
+                          <span key={m.id} className={`band-dash-chip${leader ? ' leader' : ''}`}>
+                            <span className="band-dash-avatar">{memberDisplayName(m)[0]}</span>
+                            <Icon size={12} sw={1.5} />
+                            {memberDisplayName(m)}
+                            {leader && <span className="band-leader-tag">{t('room.leaderTag')}</span>}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <Link href={playerHref} className="btn btn-primary btn-sm">{t('dash.openRoom')}</Link>
+              </div>
+            );
+          })
+        )
       ) : (
         <div className="card bands-empty">
           <span className="empty-ico"><IconBand size={20} /></span>
@@ -413,7 +458,7 @@ export function DashboardScreen() {
         </div>
       )}
 
-      <BandsSection isBanda={isBanda} />
+      <BandsSection isBanda={isBanda} userId={user?.id} />
 
       {featured.length > 0 && (
         <FeaturedSection items={featured} onOpen={openSong} />

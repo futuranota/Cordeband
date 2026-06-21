@@ -34,7 +34,22 @@ function asScoreNote(raw: unknown, bpm = 120): ScoreNote | null {
 
   const s = Number.isFinite(n.s) ? Number(n.s) : staffPos(midi);
 
-  return { beat, dur, midi, s, tab };
+  const startTime = Number.isFinite(n.startTime) ? Number(n.startTime) : null;
+  const endTime = Number.isFinite(n.endTime) ? Number(n.endTime) : null;
+  const confidence = Number.isFinite(n.confidence) ? Number(n.confidence) : null;
+  const source = typeof n.source === 'string' ? n.source : null;
+
+  return {
+    beat,
+    dur,
+    midi,
+    s,
+    tab,
+    startTime,
+    endTime,
+    confidence,
+    source,
+  };
 }
 
 export function buildScoreFromNotes(rawNotes: unknown, bpm = 120): SongScore {

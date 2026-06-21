@@ -9,7 +9,7 @@ import {
   STEMS, LIBRARY, SCORE, fmtTime, getAffiliates, stemTracksFor,
   INSTRUMENTS, type InstrumentKey, type Song, type AffiliateProduct,
 } from '@/lib/data';
-import { fetchSongById, readActiveSongId, readInstrumentConfirmedFor, saveActiveSongId } from '@/lib/supabase/fetch-song';
+import { fetchSongById, readActiveSongId, readInstrumentConfirmedFor, saveActiveSongId, saveInstrumentConfirmedFor } from '@/lib/supabase/fetch-song';
 import { fetchSongScore, type SongScore } from '@/lib/supabase/fetch-song-score';
 import { DEMO_BAND_MEMBERS } from '@/lib/demo-band';
 import { toUiBandMember, memberDisplayName, viewerMember } from '@/lib/band-room';
@@ -26,6 +26,7 @@ import {
   LEAD_BEATS_DEFAULT,
   viewerPartStatus,
 } from '@/lib/band-schedule';
+import { isYourTurnAt, windowsFromNotes } from '@/lib/note-turn-schedule';
 import { normalizePlan } from '@/lib/supabase/profile';
 import type { LocalBusiness } from '@/types/database';
 import { StagePanel } from '@/components/player/StagePanel';
@@ -37,9 +38,13 @@ import { AlphaTabViewer } from '@/components/player/AlphaTabViewer';
 import { BandSessionPanel } from '@/components/player/BandSessionPanel';
 import { BandTurnOverlay } from '@/components/player/BandTurnOverlay';
 import { BandTimeline } from '@/components/player/BandTimeline';
+import { SoloPracticeTimeline } from '@/components/player/SoloPracticeTimeline';
+import { LyricsViewer } from '@/components/player/LyricsViewer';
+import { ScoreSourceBadge } from '@/components/player/ScoreSourceBadge';
 import { useBandTurnOverlay } from '@/hooks/useBandTurnOverlay';
 import { useBandRoom } from '@/hooks/useBandRoom';
 import { useBandSync } from '@/hooks/useBandSync';
+import { useBandAudioFollow } from '@/hooks/useBandAudioFollow';
 import { usePlayerAudio, STEM_DEF_VOL } from '@/hooks/usePlayerAudio';
 import { notesToAlphaTex } from '@/lib/alphatab/notes-to-alphatex';
 import {
@@ -446,10 +451,28 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const [viewMode, setViewMode] = useState<PlayerViewMode>(initialDemoMode);
   const isBandView = resolveBandView({ isDemo, plan, viewMode, roomSession: hasRoomSession });
   const useDemoTurns = isDemo || isBandView;
+  const useScoreTurns = !isDemo && !isBandView && score.fromDb && score.notes.length > 0;
+  const useTurnUI = useDemoTurns || useScoreTurns;
   const leaderInstrument: InstrumentKey = 'guitar';
   const liveBandSession = isBandView && !!user && hasRoomSession;
 
-  const resolvedSongId = searchParams.get('songId') ?? (isDemo ? DEMO_SONG.id : readActiveSongId());
+  const paramSongId = searchParams.get('songId');
+  const storedSongId = isDemo ? DEMO_SONG.id : readActiveSongId();
+
+  const bandRoom = useBandRoom({
+    enabled: liveBandSession,
+    userId: user?.id ?? null,
+    instrument: instrument,
+    songId: paramSongId ?? storedSongId,
+    roomId: bandRoomQueryId,
+    roomCode: bandRoomQueryCode,
+  });
+
+  const resolvedSongId =
+    bandRoom.room?.song_id
+    ?? paramSongId
+    ?? (isDemo ? DEMO_SONG.id : storedSongId);
+
   const S = song ?? DEMO_SONG;
   const bpm = S.bpm || 84;
   const scoreTotalBeats = isDemo ? SCORE.totalBeats : (score.fromDb ? score.totalBeats : 0);
@@ -459,17 +482,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     1,
   );
 
-  const bandRoom = useBandRoom({
-    enabled: liveBandSession,
-    userId: user?.id ?? null,
-    instrument: instrument,
-    songId: resolvedSongId,
-    roomId: bandRoomQueryId,
-    roomCode: bandRoomQueryCode,
-  });
-
   const useLocalBandClock = !liveBandSession || bandRoom.useDemoFallback;
-  const useRealAudio = !isDemo && !!resolvedSongId && (!isBandView || useLocalBandClock);
+  const useRealAudio = !isDemo && !!resolvedSongId;
 
   const audio = usePlayerAudio({
     enabled: useRealAudio,
@@ -492,6 +506,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   const soloPlaying = useRealAudio ? audio.playing : playing;
   const soloCurBeat = useRealAudio ? audio.curBeat : curBeat;
+  const soloCurTimeSec = useRealAudio ? audio.curTimeSec : curBeat * 60 / bpm;
   const displayLoading = isDemo ? loading : (useRealAudio ? audio.audioLoading : false);
 
   const alphaTex = useMemo(() => {
@@ -511,6 +526,15 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     bpm,
     tempo,
     totalBeats: total,
+  });
+
+  useBandAudioFollow({
+    enabled: liveBandSession && bandRoom.isLive && !bandRoom.useDemoFallback && useRealAudio,
+    roomStatus: bandRoom.room?.status,
+    synced: bandSync.synced,
+    syncBeat: bandSync.curBeat,
+    bpm,
+    audio,
   });
 
   useEffect(() => {
@@ -565,6 +589,10 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       return;
     }
 
+    if (hasRoomSession && bandRoom.loading) {
+      return;
+    }
+
     if (!resolvedSongId) {
       setSongLoading(false);
       router.replace('/dashboard');
@@ -581,9 +609,13 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
         router.replace('/dashboard');
         return;
       }
-      if (readInstrumentConfirmedFor() !== resolvedSongId) {
+      const skipInstrumentGate = hasRoomSession && bandRoom.isLive;
+      if (!skipInstrumentGate && readInstrumentConfirmedFor() !== resolvedSongId) {
         router.replace(`/instrument?songId=${encodeURIComponent(resolvedSongId)}`);
         return;
+      }
+      if (skipInstrumentGate) {
+        saveInstrumentConfirmedFor(resolvedSongId);
       }
       setSong(fetched);
       saveActiveSongId(fetched.id);
@@ -595,7 +627,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     })();
 
     return () => { cancelled = true; };
-  }, [isDemo, resolvedSongId, router]);
+  }, [isDemo, resolvedSongId, router, hasRoomSession, bandRoom.loading, bandRoom.isLive]);
 
   useEffect(() => {
     if (isDemo || !resolvedSongId || songLoading) return;
@@ -615,10 +647,15 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     }
   }, [searchParams, isDemo, plan]);
 
-  const yourWindows = useMemo(
-    () => (useDemoTurns ? fractionsToBeatWindows(DEMO_YOUR_PART_FRACTIONS, total) : []),
-    [total, useDemoTurns],
-  );
+  const yourWindows = useMemo(() => {
+    if (useScoreTurns) {
+      return windowsFromNotes(score.notes, { gapBeats: 2, padBeats: 0.25 });
+    }
+    if (useDemoTurns) {
+      return fractionsToBeatWindows(DEMO_YOUR_PART_FRACTIONS, total);
+    }
+    return [];
+  }, [useScoreTurns, score.notes, useDemoTurns, total]);
   const viewerWindows = useMemo(() => {
     if (!useDemoTurns) return [];
     if (!isBandView) return yourWindows;
@@ -717,19 +754,36 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   const { status, curPart, nextPart } = viewerPartStatus(effectiveCurBeat, partWindows, LEAD_BEATS_DEFAULT);
 
   const secsToEntry = nextPart ? (nextPart.startBeat - effectiveCurBeat) / rate : null;
-  const isWaiting = useDemoTurns && status !== 'live';
+  const isWaiting = useTurnUI && status !== 'live';
   const showReadyCue = effectivePlaying && status === 'ready' && secsToEntry != null && secsToEntry <= 4.4;
   const cueNum = showReadyCue ? Math.max(1, Math.ceil(secsToEntry)) : null;
   const justEntered = effectivePlaying && curPart && (effectiveCurBeat - curPart.startBeat) < 0.9;
 
-  const activeKeys = effectivePlaying && syncReady
-    ? isBandView
-      ? activeInstrumentsAt(effectiveCurBeat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, displayInstruments)
-      : activeInstrumentsAt(effectiveCurBeat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, displayInstruments, {
-          yourInstrument: inst,
-          yourPartFractions: DEMO_YOUR_PART_FRACTIONS,
-        })
-    : [];
+  const activeKeys = useMemo(() => {
+    if (!effectivePlaying || !syncReady) return [];
+    const beat = isBandView ? effectiveCurBeat : soloCurBeat;
+    if (useScoreTurns) {
+      return isYourTurnAt(beat, yourWindows) ? [inst] : [];
+    }
+    if (isBandView) {
+      return activeInstrumentsAt(beat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, displayInstruments);
+    }
+    return activeInstrumentsAt(beat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, displayInstruments, {
+      yourInstrument: inst,
+      yourPartFractions: DEMO_YOUR_PART_FRACTIONS,
+    });
+  }, [
+    effectivePlaying,
+    syncReady,
+    useScoreTurns,
+    isBandView,
+    effectiveCurBeat,
+    soloCurBeat,
+    yourWindows,
+    inst,
+    total,
+    displayInstruments,
+  ]);
 
   const rosterMembers = useMemo(() => {
     if (bandRoom.isLive && bandRoom.room) {
@@ -783,6 +837,15 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       };
 
   const liveViewerMember = bandRoom.isLive ? viewerMember(bandRoom.members, user?.id ?? null) : null;
+
+  useEffect(() => {
+    if (!liveViewerMember) return;
+    setInstrument(liveViewerMember.instrument);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('cordeband_instrument', liveViewerMember.instrument);
+    }
+  }, [liveViewerMember?.id, liveViewerMember?.instrument]);
+
   const viewerName = liveViewerMember
     ? memberDisplayName(liveViewerMember)
     : profile?.full_name?.trim() || t('band.you');
@@ -939,11 +1002,27 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     }
   }
 
-  const renderSheet = (
+  const renderScorePanel = (
     curBeatVal: number,
+    curTimeSecVal: number,
     playingVal: boolean,
     waitingVal: boolean,
   ) => {
+    if (inst === 'vocals') {
+      return (
+        <LyricsViewer
+          windows={yourWindows}
+          curBeat={curBeatVal}
+          bpm={bpm}
+          playing={playingVal}
+          waiting={waitingVal && !displayLoading && playingVal}
+          waitLabel={t('player.waitOverlay')}
+          loading={displayLoading}
+          fromTranscription={useScoreTurns}
+        />
+      );
+    }
+
     const sheetNotes = isDemo ? SCORE.notes : score.notes;
     const sheetTotalBeats = isDemo
       ? SCORE.totalBeats
@@ -951,6 +1030,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     const sheetProps = {
       view,
       curBeat: curBeatVal,
+      curTimeSec: curTimeSecVal,
+      bpm,
       loop,
       loading: displayLoading,
       waiting: waitingVal && !displayLoading && playingVal,
@@ -1094,7 +1175,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 youInstrument={inst}
               />
 
-              {renderSheet(effectiveCurBeat, effectivePlaying, isWaiting)}
+              {renderScorePanel(effectiveCurBeat, effectiveCurBeat * 60 / bpm, effectivePlaying, isWaiting)}
 
               <div className="card transport">
                 <div className="transport-row">
@@ -1175,10 +1256,25 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 </div>
               </div>
               <div className="viewtoggle">
-                {([['staff', t('player.staff')], ['tab', t('player.tab')], ['roll', t('player.roll')]] as const).map(([k, l]) => (
-                  <button key={k} type="button" className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>
-                ))}
+                {inst === 'vocals' ? (
+                  <button type="button" className="on">{t('player.lyricsView')}</button>
+                ) : (
+                  ([['staff', t('player.staff')], ['tab', t('player.tab')], ['roll', t('player.roll')]] as const).map(([k, l]) => (
+                    <button key={k} type="button" className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>
+                  ))
+                )}
               </div>
+            </div>
+
+            <div className="player-score-meta">
+              <ScoreSourceBadge
+                fromDb={score.fromDb}
+                isDemo={isDemo}
+                noteCount={inst === 'vocals' ? yourWindows.length : score.notes.length}
+              />
+              {!soloPlaying && (score.notes.length > 0 || yourWindows.length > 0) && (
+                <span className="player-play-hint muted">{t('player.playToAnimate')}</span>
+              )}
             </div>
 
             {isDemo && (
@@ -1187,7 +1283,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               </div>
             )}
 
-            {useDemoTurns && (
+            {useTurnUI && (
               <TurnBanner status={status} secsToEntry={secsToEntry} yourTime={yourTime} />
             )}
 
@@ -1202,7 +1298,17 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               </div>
             )}
 
-            {renderSheet(soloCurBeat, soloPlaying, isWaiting)}
+            {useTurnUI && (
+              <SoloPracticeTimeline
+                instrument={inst}
+                windows={yourWindows}
+                totalBeats={total}
+                curBeat={soloCurBeat}
+                fromTranscription={useScoreTurns}
+              />
+            )}
+
+            {renderScorePanel(soloCurBeat, soloCurTimeSec, soloPlaying, isWaiting)}
 
             <div className="card transport">
               <div className="transport-row">
@@ -1213,7 +1319,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 <span className="time">{fmtTime(curTime)}</span>
                 <div className="scrub" ref={scrubRef} onPointerDown={onScrubDown}>
                   <div className="scrub-track">
-                    {useDemoTurns && yourWindows.map((p, i) => (
+                    {useTurnUI && yourWindows.map((p, i) => (
                       <div key={i} className="scrub-parts" style={{ left: `${p.startBeat / total * 100}%`, width: `${(p.endBeat - p.startBeat) / total * 100}%` }} />
                     ))}
                     {loop && <div className="scrub-loop" style={{ left: `${loop.a / total * 100}%`, width: `${(loop.b - loop.a) / total * 100}%` }} />}

@@ -4,15 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useT } from '@/i18n/context';
 import { useSession } from '@/contexts/SessionContext';
-import { INST_ORDER, INSTRUMENTS, LIBRARY, type InstrumentKey } from '@/lib/data';
-import { bandJoinUrl } from '@/lib/band-room';
+import { createClient } from '@/lib/supabase/client';
+import { INST_ORDER, INSTRUMENTS, type InstrumentKey, type Song } from '@/lib/data';
+import { bandJoinUrl, memberDisplayName } from '@/lib/band-room';
 import { canUseBandPlayer } from '@/lib/plan-access';
 import { normalizePlan } from '@/lib/supabase/profile';
+import { fetchBandEligibleSongs, pickDefaultBandSongId } from '@/lib/supabase/fetch-band-songs';
 import type { BandMemberRecord, BandRoomRecord } from '@/types/band';
 import { IconBand } from '@/components/ui/icons';
 import { ClassicLoader } from '@/components/ui/ClassicLoader';
-
-const SONG = LIBRARY[0];
 
 export function BandScreen() {
   const { t } = useT();
@@ -20,20 +20,40 @@ export function BandScreen() {
   const plan = normalizePlan(profile?.plan);
   const [copied, setCopied] = useState(false);
   const [instrument, setInstrument] = useState<InstrumentKey>('guitar');
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [songsLoading, setSongsLoading] = useState(true);
+  const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
   const [room, setRoom] = useState<BandRoomRecord | null>(null);
   const [members, setMembers] = useState<BandMemberRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createOrLoadRoom = useCallback(async (inst: InstrumentKey) => {
-    if (!user) return;
+  const selectedSong = songs.find((s) => s.id === selectedSongId) ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    setSongsLoading(true);
+    void fetchBandEligibleSongs()
+      .then((eligible) => {
+        if (cancelled) return;
+        setSongs(eligible);
+        setSelectedSongId(pickDefaultBandSongId(eligible));
+      })
+      .finally(() => {
+        if (!cancelled) setSongsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const createOrLoadRoom = useCallback(async (inst: InstrumentKey, songId: string | null) => {
+    if (!user || !songId) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/band-rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instrument: inst, songId: SONG.id }),
+        body: JSON.stringify({ instrument: inst, songId }),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
@@ -42,6 +62,9 @@ export function BandScreen() {
       const session = await res.json() as { room: BandRoomRecord; members: BandMemberRecord[] };
       setRoom(session.room);
       setMembers(session.members);
+      if (session.room.song_id) {
+        setSelectedSongId(session.room.song_id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create room');
     } finally {
@@ -50,19 +73,55 @@ export function BandScreen() {
   }, [user]);
 
   useEffect(() => {
-    if (canUseBandPlayer(plan) && user) {
-      void createOrLoadRoom(instrument);
+    if (canUseBandPlayer(plan) && user && selectedSongId) {
+      void createOrLoadRoom(instrument, selectedSongId);
     }
-    // Initial room load only — instrument updates happen on picker click
+    // Initial room load only — instrument/song updates happen on picker click
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, user]);
+  }, [plan, user, selectedSongId]);
+
+  useEffect(() => {
+    if (!room?.id) return;
+
+    const supabase = createClient();
+    const roomId = room.id;
+
+    const fetchMembers = async () => {
+      const { data } = await supabase
+        .from('band_members')
+        .select('*, profiles(full_name)')
+        .eq('room_id', roomId)
+        .order('joined_at', { ascending: true });
+      if (data) setMembers(data as BandMemberRecord[]);
+    };
+
+    const channel = supabase
+      .channel(`band_lobby:${roomId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'band_members', filter: `room_id=eq.${roomId}` },
+        () => { void fetchMembers(); },
+      )
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [room?.id]);
 
   function pickInstrument(key: InstrumentKey) {
     setInstrument(key);
-    if (room) void createOrLoadRoom(key);
+    if (room && selectedSongId) void createOrLoadRoom(key, selectedSongId);
+  }
+
+  function pickSong(songId: string) {
+    setSelectedSongId(songId);
   }
 
   const joinLink = room ? bandJoinUrl(room.code) : '';
+  const playerHref = room && selectedSongId
+    ? `/player?room=${room.id}&songId=${encodeURIComponent(selectedSongId)}`
+    : room
+      ? `/player?room=${room.id}`
+      : '#';
 
   function copy() {
     if (!joinLink) return;
@@ -109,16 +168,52 @@ export function BandScreen() {
             <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               {t('room.chooseSong')}
             </p>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 8, background: 'var(--acc-soft)',
-                border: '1px solid var(--acc-line)', display: 'grid', placeItems: 'center', fontSize: 18,
-              }}>{SONG.glyph}</div>
+            {songsLoading ? (
+              <ClassicLoader size="sm" />
+            ) : songs.length === 0 ? (
               <div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{SONG.title}</p>
-                <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>{SONG.artist}</p>
+                <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>{t('room.noSongsReady')}</p>
+                <Link href="/upload" className="btn btn-ghost btn-sm">{t('dash.quickUpload')}</Link>
               </div>
-            </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+                {songs.map((song) => {
+                  const active = song.id === selectedSongId;
+                  return (
+                    <button
+                      key={song.id}
+                      type="button"
+                      onClick={() => pickSong(song.id)}
+                      style={{
+                        display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left',
+                        background: active ? 'var(--acc-soft)' : 'var(--elev-2)',
+                        border: `1px solid ${active ? 'var(--acc-line)' : 'var(--line)'}`,
+                        borderRadius: 'var(--radius-sm)', padding: '10px 12px', cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 8, background: 'var(--elev-1)',
+                        border: '1px solid var(--line)', display: 'grid', placeItems: 'center', fontSize: 16,
+                        flexShrink: 0,
+                      }}>{song.glyph}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {song.title}
+                        </p>
+                        <p className="muted" style={{ margin: '2px 0 0', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {song.artist}{song.isFeatured ? ` · ${t('dash.featTitle')}` : ''}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {selectedSong && (
+              <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>
+                {t('room.selectedSong')}: {selectedSong.title}
+              </p>
+            )}
           </div>
 
           <div className="card" style={{ padding: 20 }}>
@@ -136,9 +231,22 @@ export function BandScreen() {
               </button>
             </div>
             {members.length > 0 && (
-              <p className="muted" style={{ fontSize: 12, marginTop: 12 }}>
-                {t('room.inRoom')}: {members.length}
-              </p>
+              <div style={{ marginTop: 12 }}>
+                <p className="muted" style={{ fontSize: 12, margin: '0 0 8px' }}>
+                  {t('room.inRoom')}: {members.length}
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {members.map((m) => {
+                    const { Icon } = INSTRUMENTS[m.instrument];
+                    return (
+                      <span key={m.id} className="band-dash-chip">
+                        <Icon size={12} sw={1.5} />
+                        {memberDisplayName(m)}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
 
@@ -176,9 +284,9 @@ export function BandScreen() {
             })}
           </div>
 
-          {room && (
+          {room && selectedSongId && (
             <Link
-              href={`/player?room=${room.id}`}
+              href={playerHref}
               className="btn btn-primary btn-block"
               style={{ marginBottom: 10 }}
             >

@@ -203,6 +203,11 @@ export type ScoreNote = {
   midi: number;
   s: number;
   tab: { string: number; fret: number };
+  /** Segundos de audio — pipeline v2 / migración DB */
+  startTime?: number | null;
+  endTime?: number | null;
+  confidence?: number | null;
+  source?: string | null;
 };
 
 const E = 64, G = 67, A4 = 69, B4 = 71, C5 = 72, D = 62, C = 60, F = 65;

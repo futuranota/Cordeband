@@ -7,12 +7,16 @@ import { uploadStemWav, userStemPath } from '@/lib/supabase/user-song-storage';
 const STEMS_TTL_MS = 48 * 60 * 60 * 1000;
 const CATALOG_SET = new Set<string>(CATALOG_INSTRUMENTS);
 
-function buildNotesForInstrument(instrument: string) {
+function buildNotesForInstrument(instrument: string, bpm = 84) {
   return SCORE.notes.map((n) => ({
     beat: n.beat,
     dur: n.dur,
     midi: n.midi,
     s: n.s,
+    startTime: (n.beat * 60) / bpm,
+    endTime: ((n.beat + n.dur) * 60) / bpm,
+    confidence: 1,
+    source: 'ai_basic_pitch',
     tab: instrument === 'guitar' || instrument === 'bass' ? n.tab : undefined,
   }));
 }
@@ -110,7 +114,7 @@ async function runMockProcessor(
 
         if (stemErr) throw stemErr;
 
-        const notes = buildNotesForInstrument(instrument);
+        const notes = buildNotesForInstrument(instrument, mockBpm);
         const { error: noteErr } = await admin.from('note_sequences').insert({
           song_id: songId,
           stem_id: stem.id,
@@ -120,6 +124,8 @@ async function runMockProcessor(
             ? notes.map((n) => n.tab).filter(Boolean)
             : null,
           key_signature: keySig,
+          source: 'ai_basic_pitch',
+          confidence_avg: 1,
         });
 
         if (noteErr) throw noteErr;

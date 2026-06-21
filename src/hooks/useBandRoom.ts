@@ -43,7 +43,7 @@ export function useBandRoom(opts: UseBandRoomOptions): UseBandRoomResult {
   const instrumentRef = useRef(opts.instrument);
   instrumentRef.current = opts.instrument;
 
-  const loadSession = useCallback(async (instrument: InstrumentKey) => {
+  const loadSession = useCallback(async (instrument: InstrumentKey, forceInstrumentUpdate = false) => {
     const res = await fetch('/api/band-rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -52,6 +52,7 @@ export function useBandRoom(opts: UseBandRoomOptions): UseBandRoomResult {
         songId: opts.songId ?? null,
         roomId: opts.roomId ?? null,
         code: opts.roomCode ?? null,
+        forceInstrumentUpdate,
       }),
     });
 
@@ -92,7 +93,7 @@ export function useBandRoom(opts: UseBandRoomOptions): UseBandRoomResult {
     setError(null);
     setUseDemoFallback(false);
 
-    loadSession(instrumentRef.current)
+    loadSession(instrumentRef.current, false)
       .then((session) => {
         if (cancelled) return;
         setRoom(session.room);
@@ -108,7 +109,7 @@ export function useBandRoom(opts: UseBandRoomOptions): UseBandRoomResult {
       });
 
     return () => { cancelled = true; };
-  }, [opts.enabled, opts.userId, opts.instrument, loadSession]);
+  }, [opts.enabled, opts.userId, loadSession]);
 
   useEffect(() => {
     if (!opts.enabled || !room?.id || useDemoFallback) return;
@@ -140,7 +141,7 @@ export function useBandRoom(opts: UseBandRoomOptions): UseBandRoomResult {
   const refreshInstrument = useCallback(async (instrument: InstrumentKey) => {
     if (!opts.enabled || !opts.userId) return;
     try {
-      const session = await loadSession(instrument);
+      const session = await loadSession(instrument, true);
       setRoom(session.room);
       setMembers(session.members);
       setUseDemoFallback(false);

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { generateRoomCode } from '@/lib/band-room';
 import { getProfile, normalizePlan } from '@/lib/supabase/profile';
+import { assertHostCanUseSong, isValidSongUuid } from '@/lib/supabase/validate-band-song';
 import type { BandMemberRecord, BandRoomRecord } from '@/types/band';
 import type { InstrumentKey } from '@/lib/data';
 
@@ -29,6 +30,7 @@ export async function ensureBandRoomSession(opts: {
   roomId?: string | null;
   code?: string | null;
   guestName?: string | null;
+  forceInstrumentUpdate?: boolean;
 }): Promise<{ room: BandRoomRecord; members: BandMemberRecord[] }> {
   if (opts.roomId || opts.code) {
     return joinBandRoom({
@@ -37,6 +39,7 @@ export async function ensureBandRoomSession(opts: {
       roomId: opts.roomId ?? null,
       code: opts.code ?? null,
       guestName: opts.guestName ?? null,
+      forceInstrumentUpdate: opts.forceInstrumentUpdate ?? false,
     });
   }
 
@@ -44,6 +47,14 @@ export async function ensureBandRoomSession(opts: {
   const profile = await getProfile(supabase, opts.userId);
   if (normalizePlan(profile?.plan) !== 'banda') {
     throw new Error('Band plan required to create a room');
+  }
+
+  const songId = opts.songId && isValidSongUuid(opts.songId) ? opts.songId : null;
+  if (opts.songId && !songId) {
+    throw new Error('Invalid song id');
+  }
+  if (songId) {
+    await assertHostCanUseSong(supabase, opts.userId, songId);
   }
 
   const { data: existing } = await supabase
@@ -57,6 +68,22 @@ export async function ensureBandRoomSession(opts: {
 
   let room = existing as BandRoomRecord | null;
 
+  if (room && songId && room.song_id !== songId) {
+    const { data: updated, error: updateErr } = await supabase
+      .from('band_rooms')
+      .update({ song_id: songId })
+      .eq('id', room.id)
+      .eq('host_id', opts.userId)
+      .neq('status', 'ended')
+      .select('*')
+      .single();
+
+    if (updateErr || !updated) {
+      throw updateErr ?? new Error('Could not update room song');
+    }
+    room = updated as BandRoomRecord;
+  }
+
   if (!room) {
     let code = generateRoomCode();
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -65,7 +92,7 @@ export async function ensureBandRoomSession(opts: {
         .insert({
           code,
           host_id: opts.userId,
-          song_id: opts.songId ?? null,
+          song_id: songId,
           status: 'waiting',
         })
         .select('*')
@@ -110,6 +137,7 @@ async function joinBandRoom(opts: {
   roomId: string | null;
   code: string | null;
   guestName?: string | null;
+  forceInstrumentUpdate?: boolean;
 }): Promise<{ room: BandRoomRecord; members: BandMemberRecord[] }> {
   const supabase = await createClient();
 
@@ -125,6 +153,18 @@ async function joinBandRoom(opts: {
   const { data: room, error: roomErr } = await query.single();
   if (roomErr || !room) throw roomErr ?? new Error('Room not found');
   if (room.status === 'ended') throw new Error('Room has ended');
+
+  const { data: existingMember } = await supabase
+    .from('band_members')
+    .select('id')
+    .eq('room_id', room.id)
+    .eq('user_id', opts.userId)
+    .maybeSingle();
+
+  if (existingMember && !opts.forceInstrumentUpdate && !opts.guestName) {
+    const members = await fetchMembers(supabase, room.id);
+    return { room: room as BandRoomRecord, members };
+  }
 
   const profile = await getProfile(supabase, opts.userId);
   const displayName = opts.guestName?.trim()
