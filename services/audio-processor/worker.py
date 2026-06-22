@@ -5,6 +5,7 @@ import sys
 import tempfile
 import wave
 from pathlib import Path
+from callbacks import notify_callback
 from config import (
     DEFAULT_BPM,
     DEMUCS_STEMS,
@@ -111,7 +112,16 @@ def _convert_to_mp3(wav_path: Path, mp3_path: Path) -> Path:
     return mp3_path
 
 
-def process_song(song_id: str, storage_path: str, job_id: str, _instrument_hint: list[str]) -> None:
+def process_song(
+    song_id: str,
+    storage_path: str,
+    job_id: str,
+    _instrument_hint: list[str],
+    *,
+    skip_transcription_for: str | None = None,
+    callback_url: str | None = None,
+    callback_token: str | None = None,
+) -> None:
     client = get_client()
 
     try:
@@ -152,6 +162,10 @@ def process_song(song_id: str, storage_path: str, job_id: str, _instrument_hint:
                 stem_id = insert_stem_row(client, song_id, inst, storage_target)
 
                 update_job(client, job_id, progress_pct=PROGRESS_STEPS[4])
+                if skip_transcription_for and inst == skip_transcription_for:
+                    # User uploaded their own MIDI for this instrument; Next.js will
+                    # convert it into note_sequences once we notify completion.
+                    continue
                 notes = transcribe_stem(wav_path, inst, float(bpm))
                 if notes:
                     insert_note_sequence(
@@ -177,6 +191,17 @@ def process_song(song_id: str, storage_path: str, job_id: str, _instrument_hint:
             )
             update_job(client, job_id, status="completed", progress_pct=PROGRESS_STEPS[5], completed=True)
 
+        notify_callback(
+            callback_url,
+            callback_token,
+            {"job_id": job_id, "song_id": song_id, "status": "completed"},
+        )
+
     except Exception as exc:
         mark_song_failed(client, song_id, job_id, str(exc))
+        notify_callback(
+            callback_url,
+            callback_token,
+            {"job_id": job_id, "song_id": song_id, "status": "failed", "error": str(exc)},
+        )
         raise

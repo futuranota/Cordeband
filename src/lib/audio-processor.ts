@@ -22,6 +22,12 @@ function processorUnreachableMessage(cause: unknown): string {
   return detail || 'Processor dispatch failed';
 }
 
+function buildCallbackUrl(jobId: string): string | null {
+  const base = process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!base) return null;
+  return `${base.replace(/\/$/, '')}/api/processing-jobs/${jobId}/complete`;
+}
+
 export async function dispatchSongProcessing(
   songId: string,
   storagePath: string,
@@ -57,6 +63,8 @@ export async function dispatchSongProcessing(
           // The processor must still separate this stem, but must skip Basic Pitch
           // transcription for it — the MIDI replaces that note source entirely.
           skip_transcription_for: song?.pending_midi_instrument ?? null,
+          callback_url: buildCallbackUrl(jobId),
+          callback_token: process.env.PROCESSOR_CALLBACK_TOKEN?.trim() || null,
         }),
       });
     } catch (err) {

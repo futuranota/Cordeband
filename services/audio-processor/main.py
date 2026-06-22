@@ -20,6 +20,9 @@ class ProcessRequest(BaseModel):
     storage_path: str
     job_id: str
     instrument_hint: list[str] = Field(default_factory=list)
+    skip_transcription_for: str | None = None
+    callback_url: str | None = None
+    callback_token: str | None = None
 
 
 def _auth(authorization: str | None) -> None:
@@ -30,7 +33,15 @@ def _auth(authorization: str | None) -> None:
 
 
 def _run_job(req: ProcessRequest) -> None:
-    process_song(req.song_id, req.storage_path, req.job_id, req.instrument_hint)
+    process_song(
+        req.song_id,
+        req.storage_path,
+        req.job_id,
+        req.instrument_hint,
+        skip_transcription_for=req.skip_transcription_for,
+        callback_url=req.callback_url,
+        callback_token=req.callback_token,
+    )
 
 
 @app.get("/health")
