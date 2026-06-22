@@ -4,6 +4,8 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = { title: 'Crear cuenta — Cordeband' };
 
+export const dynamic = 'force-dynamic';
+
 export default function SignupPage() {
   return (
     <Suspense fallback={null}>
