@@ -11,13 +11,12 @@ import {
   uploadUserOriginal,
   userOriginalPath,
 } from '@/lib/supabase/user-song-storage';
+import { validateUpload } from '@/lib/upload-validation';
 import {
   mapUserSongRowToSong,
   USER_SONG_SELECT,
   type UserSongRow,
 } from '@/lib/supabase/user-songs';
-
-const AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/x-flac'];
 
 function pickGlyph(title: string): string {
   const glyphs = ['♪', '♫', '♬', '♩'];
@@ -75,11 +74,12 @@ export async function POST(request: Request) {
   if (!(audio instanceof File) || audio.size === 0) {
     return NextResponse.json({ error: 'Audio file is required' }, { status: 400 });
   }
-  if (audio.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: 'File exceeds 50 MB limit' }, { status: 400 });
-  }
-  if (audio.type && !AUDIO_TYPES.includes(audio.type) && !audio.name.match(/\.(mp3|wav|flac)$/i)) {
-    return NextResponse.json({ error: 'Unsupported audio format' }, { status: 400 });
+  const audioCheck = await validateUpload(audio, {
+    kind: 'audio',
+    maxBytes: MAX_UPLOAD_BYTES,
+  });
+  if (!audioCheck.ok) {
+    return NextResponse.json({ error: audioCheck.error }, { status: audioCheck.status });
   }
 
   const instruments = parseInstrumentsFromForm(form);

@@ -5,8 +5,8 @@ import { getInstrumentDetectionMode } from '@/lib/instrument-detection';
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
-  const { error } = await requireAdmin();
+export async function GET(request: Request, { params }: Params) {
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const { id: songId } = await params;
