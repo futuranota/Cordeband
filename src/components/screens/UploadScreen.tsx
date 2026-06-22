@@ -6,8 +6,6 @@ import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
 import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
 import { InstrumentPicker } from '@/components/instruments/InstrumentPicker';
-import { MidiUploadTermsDialog } from '@/components/player/MidiUploadTermsDialog';
-import { hasAcceptedMidiUploadTerms } from '@/lib/midi-upload-terms';
 import type { InstrumentKey } from '@/lib/data';
 import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
 import { instrumentBannerKeys } from '@/lib/instrument-detection';
@@ -22,85 +20,12 @@ type Stage = 'idle' | 'uploading' | 'error';
 const AUDIO_ACCEPT = '.mp3,.wav,.flac,audio/*';
 const MAX_BYTES = 52_428_800;
 
-function MidiAttach({
-  midiFile,
-  onMidiChange,
-  disabled,
-}: {
-  midiFile: File | null;
-  onMidiChange: (file: File | null) => void;
-  disabled?: boolean;
-}) {
-  const { t } = useT();
-  const [error, setError] = useState<string | null>(null);
-  const [termsOpen, setTermsOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function handleFile(file: File | undefined) {
-    if (!file) return;
-    setError(null);
-    if (!file.name.match(/\.midi?$/i)) {
-      setError(t('up.midiFormat'));
-      return;
-    }
-    onMidiChange(file);
-  }
-
-  function openPicker() {
-    if (hasAcceptedMidiUploadTerms()) {
-      inputRef.current?.click();
-    } else {
-      setTermsOpen(true);
-    }
-  }
-
-  return (
-    <div className="card" style={{ marginBottom: 24, padding: 20, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
-      <label className="field-label">{t('up.midiLabel')}</label>
-      <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>{t('up.midiHint')}</p>
-      {midiFile ? (
-        <div className="row spread">
-          <span style={{ fontSize: 13.5 }}>{t('up.midiSelected')} {midiFile.name}</span>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={() => onMidiChange(null)}>
-            {t('up.midiRemove')}
-          </button>
-        </div>
-      ) : (
-        <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={openPicker}>
-          <IconUpload size={14} /> {t('up.midiAttach')}
-        </button>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".mid,.midi,audio/midi"
-        hidden
-        disabled={disabled}
-        onChange={(e) => handleFile(e.target.files?.[0])}
-      />
-      {error && (
-        <p style={{ color: '#ef4444', fontSize: 13, margin: '10px 0 0' }}>{error}</p>
-      )}
-      <MidiUploadTermsDialog
-        open={termsOpen}
-        onCancel={() => setTermsOpen(false)}
-        onAccepted={() => {
-          setTermsOpen(false);
-          inputRef.current?.click();
-        }}
-      />
-    </div>
-  );
-}
-
 function Dropzone({
   onPick,
   disabled,
   instruments,
   onInstrumentsChange,
   instrumentError,
-  midiFile,
-  onMidiChange,
   fromStudio,
 }: {
   onPick: (file: File) => void;
@@ -108,8 +33,6 @@ function Dropzone({
   instruments: InstrumentKey[];
   onInstrumentsChange: (next: InstrumentKey[]) => void;
   instrumentError: string | null;
-  midiFile: File | null;
-  onMidiChange: (file: File | null) => void;
   fromStudio?: boolean;
 }) {
   const { t } = useT();
@@ -150,8 +73,6 @@ function Dropzone({
           error={instrumentError}
         />
       </div>
-
-      <MidiAttach midiFile={midiFile} onMidiChange={onMidiChange} disabled={disabled} />
 
       <div
         className={`dropzone${drag ? ' drag' : ''}${disabled ? ' disabled' : ''}`}
@@ -211,14 +132,12 @@ function parseInstruments(raw: unknown): InstrumentKey[] {
 function ProcessingStatus({
   fileName,
   songId,
-  midiWarning,
   onDone,
   onFailed,
   onCancel,
 }: {
   fileName: string;
   songId: string;
-  midiWarning: string | null;
   onDone: () => void;
   onFailed: (message: string) => void;
   onCancel: () => void;
@@ -309,9 +228,6 @@ function ProcessingStatus({
 
   return (
     <div className="upload-wrap page">
-      {midiWarning && (
-        <p style={{ color: '#ef4444', fontSize: 13, textAlign: 'center', marginBottom: 14 }}>{midiWarning}</p>
-      )}
       <div className="card proc-card">
         <div className="row spread" style={{ marginBottom: 20 }}>
           <div className="row gap-12">
@@ -379,8 +295,6 @@ export function UploadScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [instruments, setInstruments] = useState<InstrumentKey[]>(['guitar']);
   const [instrumentError, setInstrumentError] = useState<string | null>(null);
-  const [midiFile, setMidiFile] = useState<File | null>(null);
-  const [midiWarning, setMidiWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (!fromStudio) return;
@@ -399,7 +313,6 @@ export function UploadScreen() {
     setFileName(file.name);
     setErrorMessage(null);
     setInstrumentError(null);
-    setMidiWarning(null);
     setSubmitting(true);
     setStage('uploading');
 
@@ -438,21 +351,6 @@ export function UploadScreen() {
 
       if (!uploadRes.ok) {
         throw new Error(t('up.errB'));
-      }
-
-      if (midiFile) {
-        try {
-          const midiForm = new FormData();
-          midiForm.append('file', midiFile);
-          midiForm.append('instrument', instruments[0]);
-          const midiRes = await fetch(`/api/songs/${createdSongId}/midi`, { method: 'POST', body: midiForm });
-          if (!midiRes.ok) {
-            setMidiWarning(t('up.midiUploadFailed'));
-          }
-        } catch {
-          // Non-fatal: the song still uploads with the AI score if this fails.
-          setMidiWarning(t('up.midiUploadFailed'));
-        }
       }
 
       const completeRes = await fetch(`/api/songs/${createdSongId}/upload-complete`, {
@@ -503,7 +401,6 @@ export function UploadScreen() {
       <ProcessingStatus
         fileName={fileName}
         songId={songId}
-        midiWarning={midiWarning}
         onDone={onDone}
         onFailed={(msg) => { setErrorMessage(msg); setStage('error'); }}
         onCancel={() => { setStage('idle'); setSongId(null); }}
@@ -538,8 +435,6 @@ export function UploadScreen() {
         if (next.length) setInstrumentError(null);
       }}
       instrumentError={instrumentError}
-      midiFile={midiFile}
-      onMidiChange={setMidiFile}
       fromStudio={fromStudio}
     />
   );
