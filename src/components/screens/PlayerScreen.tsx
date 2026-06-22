@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useT } from '@/i18n/context';
@@ -33,6 +33,7 @@ import { StagePanel } from '@/components/player/StagePanel';
 import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
 import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
 import { instrumentBannerKeys } from '@/lib/instrument-detection';
+import { MidiOverrideButton } from '@/components/player/MidiOverrideButton';
 import { SheetViewer } from '@/components/player/SheetViewer';
 import { AlphaTabViewer } from '@/components/player/AlphaTabViewer';
 import { BandSessionPanel } from '@/components/player/BandSessionPanel';
@@ -746,6 +747,11 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   const inst = instrument;
   const instName = t(`inst.${inst}`);
+  const refreshScore = useCallback(() => {
+    if (isDemo || !resolvedSongId) return;
+    void fetchSongScore(resolvedSongId, inst, song?.bpm || 120).then(setScore);
+  }, [isDemo, resolvedSongId, inst, song?.bpm]);
+  const showMidiButton = !isDemo && !!resolvedSongId && inst !== 'vocals' && inst !== 'drums';
   const showAiCaveat = !isDemo
     && score.fromDb
     && score.notes.length > 0
@@ -1217,6 +1223,14 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                   noteCount={inst === 'vocals' ? yourWindows.length : score.notes.length}
                   notes={score.notes}
                 />
+                {showMidiButton && resolvedSongId && (
+                  <MidiOverrideButton
+                    songId={resolvedSongId}
+                    instrument={inst}
+                    isUserMidi={isFullMidiScore}
+                    onUploaded={refreshScore}
+                  />
+                )}
               </div>
 
               {renderScorePanel(
@@ -1323,6 +1337,14 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 noteCount={inst === 'vocals' ? yourWindows.length : score.notes.length}
                 notes={score.notes}
               />
+              {showMidiButton && resolvedSongId && (
+                <MidiOverrideButton
+                  songId={resolvedSongId}
+                  instrument={inst}
+                  isUserMidi={isFullMidiScore}
+                  onUploaded={refreshScore}
+                />
+              )}
               {!soloPlaying && (score.notes.length > 0 || yourWindows.length > 0) && (
                 <span className="player-play-hint muted">{t('player.playToAnimate')}</span>
               )}
