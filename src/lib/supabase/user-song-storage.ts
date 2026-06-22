@@ -14,6 +14,26 @@ export function userStemPath(songId: string, instrument: string): string {
   return `songs/${songId}/stems/${instrument}.wav`;
 }
 
+export function userPendingMidiPath(songId: string): string {
+  return `songs/${songId}/pending-midi.mid`;
+}
+
+export async function uploadPendingMidi(path: string, buffer: ArrayBuffer): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.storage.from(BUCKET).upload(path, Buffer.from(buffer), {
+    contentType: 'audio/midi',
+    upsert: true,
+  });
+  if (error) throw error;
+}
+
+export async function downloadPendingMidi(path: string): Promise<ArrayBuffer> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(BUCKET).download(path);
+  if (error || !data) throw error ?? new Error('Pending MIDI not found');
+  return data.arrayBuffer();
+}
+
 export async function createUserOriginalUploadUrl(path: string) {
   const admin = createAdminClient();
   const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);

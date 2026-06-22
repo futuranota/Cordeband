@@ -2,14 +2,18 @@
 
 import { useT } from '@/i18n/context';
 import type { InstrumentKey, ScoreNote } from '@/lib/data';
-import { isScoreUnavailable, resolveScoreQuality } from '@/lib/score-quality';
+import {
+  isScoreUnavailable,
+  resolveScoreQuality,
+  resolveTranscriptionTrust,
+} from '@/lib/score-quality';
 
 type ScoreSourceBadgeProps = {
   fromDb: boolean;
   isDemo: boolean;
   instrument: InstrumentKey;
   noteCount?: number;
-  notes?: readonly Pick<ScoreNote, 'quality'>[];
+  notes?: readonly Pick<ScoreNote, 'quality' | 'confidence' | 'source'>[];
 };
 
 export function ScoreSourceBadge({
@@ -38,6 +42,25 @@ export function ScoreSourceBadge({
   }
 
   if (fromDb && noteCount > 0) {
+    const trust = resolveTranscriptionTrust(instrument, notes);
+    const isUserMidi = notes.some((n) => n.source === 'user_upload');
+
+    if (isUserMidi) {
+      return (
+        <span className="score-source-badge uncertain" title={t('player.scoreUserMidiHint')}>
+          {t('player.scoreUserMidi')}
+        </span>
+      );
+    }
+
+    if (trust === 'trusted') {
+      return (
+        <span className="score-source-badge trusted" title={t('scoreQuality.trustedHint')}>
+          {t('scoreQuality.trusted')}
+        </span>
+      );
+    }
+
     const quality = resolveScoreQuality(instrument, notes);
     const labelKey =
       quality === 'high'
@@ -47,15 +70,17 @@ export function ScoreSourceBadge({
           : 'player.scoreAiDraft';
 
     const hintKey =
-      quality === 'high'
-        ? 'player.scoreAiHighHint'
-        : quality === 'medium'
-          ? 'player.scoreAiMediumHint'
-          : 'player.scoreAiDraftHint';
+      trust === 'uncertain'
+        ? 'scoreQuality.uncertainHint'
+        : quality === 'high'
+          ? 'player.scoreAiHighHint'
+          : quality === 'medium'
+            ? 'player.scoreAiMediumHint'
+            : 'player.scoreAiDraftHint';
 
     return (
-      <span className="score-source-badge real" title={t(hintKey)}>
-        {t(labelKey)}
+      <span className="score-source-badge uncertain" title={t(hintKey)}>
+        {trust === 'uncertain' ? t('scoreQuality.uncertain') : t(labelKey)}
       </span>
     );
   }

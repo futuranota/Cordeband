@@ -41,7 +41,7 @@ import { BandTimeline } from '@/components/player/BandTimeline';
 import { SoloPracticeTimeline } from '@/components/player/SoloPracticeTimeline';
 import { LyricsViewer } from '@/components/player/LyricsViewer';
 import { ScoreSourceBadge } from '@/components/player/ScoreSourceBadge';
-import { isScoreUnavailable } from '@/lib/score-quality';
+import { isScoreUnavailable, shouldShowAiCaveat } from '@/lib/score-quality';
 import { useBandTurnOverlay } from '@/hooks/useBandTurnOverlay';
 import { useBandRoom } from '@/hooks/useBandRoom';
 import { useBandSync } from '@/hooks/useBandSync';
@@ -56,9 +56,10 @@ import {
 } from '@/lib/demo-band-room';
 import { buildTimelineLanes } from '@/lib/band-timeline';
 import { ClassicLoader } from '@/components/ui/ClassicLoader';
+import { resolveScorePlaybackClock } from '@/lib/midi/score-sync';
 import {
   IconPlay, IconPause, IconArrow, IconArrowL, IconLoop, IconGauge, IconVolume, IconMute,
-  IconWave, IconSpark, IconClock, IconCheck, IconReset, IconUpload, IconExternal, IconCart,
+  IconWave, IconSpark, IconClock, IconCheck, IconReset, IconExternal, IconCart,
   IconCrown, IconBand, IconRotate,
 } from '@/components/ui/icons';
 
@@ -745,6 +746,39 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   const inst = instrument;
   const instName = t(`inst.${inst}`);
+  const showAiCaveat = !isDemo
+    && score.fromDb
+    && score.notes.length > 0
+    && inst !== 'vocals'
+    && score.source !== 'user_upload'
+    && shouldShowAiCaveat(inst, score.notes);
+  const aiCaveatLabel = t('scoreQuality.aiWatermark');
+  const isFullMidiScore = score.source === 'user_upload';
+  const audioDurationSec = S.duration > 0 ? S.duration : total * 60 / bpm;
+
+  const soloScoreClock = useMemo(
+    () => resolveScorePlaybackClock(
+      soloCurTimeSec,
+      soloCurBeat,
+      audioDurationSec,
+      bpm,
+      score.notes,
+      score.source,
+    ),
+    [soloCurTimeSec, soloCurBeat, audioDurationSec, bpm, score.notes, score.source],
+  );
+
+  const bandScoreClock = useMemo(
+    () => resolveScorePlaybackClock(
+      effectiveCurBeat * 60 / bpm,
+      effectiveCurBeat,
+      audioDurationSec,
+      bpm,
+      score.notes,
+      score.source,
+    ),
+    [effectiveCurBeat, audioDurationSec, bpm, score.notes, score.source],
+  );
   const ownStemMuted = (vols[inst] ?? 0) <= 0;
   const setVol = (k: string, v: number) => setVols((p) => ({ ...p, [k]: v }));
   const curTime = effectiveCurBeat * 60 / bpm;
@@ -960,11 +994,6 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     });
   }
 
-  const downloadMp3 = () => {
-    if (!user) { router.push('/signup'); return; }
-    setToast(`${t('player.dlPrep')} ${instName}…`);
-    setTimeout(() => setToast(`${t('player.dlReady')} Cordeband — ${S.title} (–${instName}).mp3`), 1700);
-  };
 
   const instrumentHref = resolvedSongId
     ? `/instrument?songId=${encodeURIComponent(resolvedSongId)}`
@@ -1044,6 +1073,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
         : !isDemo && !score.fromDb
           ? t('player.scoreEmpty')
           : undefined,
+      aiCaveat: showAiCaveat,
+      aiCaveatLabel,
     };
 
     if (useAlphaTab && alphaTex && view !== 'roll') {
@@ -1057,10 +1088,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
             waitLabel={sheetProps.waitLabel}
             fallback={<SheetViewer {...sheetProps} />}
           />
-          {score.fromDb && (
-            <p className="muted" style={{ fontSize: 12, textAlign: 'center', marginTop: 8 }}>
-              {t('player.scoreApprox')}
-            </p>
+          {showAiCaveat && (
+            <p className="player-score-disclaimer muted">{t('up.aiDisclaimer')}</p>
           )}
         </>
       );
@@ -1180,7 +1209,26 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 youInstrument={inst}
               />
 
-              {renderScorePanel(effectiveCurBeat, effectiveCurBeat * 60 / bpm, effectivePlaying, isWaiting)}
+              <div className="player-score-meta">
+                <ScoreSourceBadge
+                  fromDb={score.fromDb}
+                  isDemo={isDemo}
+                  instrument={inst}
+                  noteCount={inst === 'vocals' ? yourWindows.length : score.notes.length}
+                  notes={score.notes}
+                />
+              </div>
+
+              {renderScorePanel(
+                bandScoreClock.curBeat,
+                bandScoreClock.curTimeSec,
+                effectivePlaying,
+                isWaiting,
+              )}
+
+              {isFullMidiScore && (
+                <p className="player-score-disclaimer muted">{t('player.midiFullSyncHint')}</p>
+              )}
 
               <div className="card transport">
                 <div className="transport-row">
@@ -1216,10 +1264,6 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                   )}
                   <button type="button" className="chip-btn" onClick={restartPlayback}>
                     <IconReset size={14} /> {t('player.restart')}
-                  </button>
-                  <div className="grow" />
-                  <button type="button" className="btn btn-primary btn-sm" onClick={downloadMp3}>
-                    <IconUpload size={14} style={{ transform: 'rotate(180deg)' }} /> {t('player.download')}
                   </button>
                 </div>
               </div>
@@ -1284,6 +1328,10 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               )}
             </div>
 
+            {showAiCaveat && (
+              <p className="player-score-disclaimer muted">{t('up.aiDisclaimer')}</p>
+            )}
+
             {isDemo && (
               <div className="card" style={{ marginBottom: 12, borderColor: 'var(--line-2)' }}>
                 <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>{t('player.demoNoAudio')}</p>
@@ -1315,7 +1363,16 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
               />
             )}
 
-            {renderScorePanel(soloCurBeat, soloCurTimeSec, soloPlaying, isWaiting)}
+            {renderScorePanel(
+              soloScoreClock.curBeat,
+              soloScoreClock.curTimeSec,
+              soloPlaying,
+              isWaiting,
+            )}
+
+            {isFullMidiScore && (
+              <p className="player-score-disclaimer muted">{t('player.midiFullSyncHint')}</p>
+            )}
 
             <div className="card transport">
               <div className="transport-row">
@@ -1346,10 +1403,6 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 )}
                 <button type="button" className="chip-btn" onClick={restartPlayback}>
                   <IconReset size={14} /> {t('player.restart')}
-                </button>
-                <div className="grow" />
-                <button type="button" className="btn btn-primary btn-sm" onClick={downloadMp3}>
-                  <IconUpload size={14} style={{ transform: 'rotate(180deg)' }} /> {t('player.download')}
                 </button>
               </div>
             </div>

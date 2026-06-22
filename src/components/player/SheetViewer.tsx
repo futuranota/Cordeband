@@ -265,6 +265,8 @@ type SheetViewerProps = {
   notes?: ScoreNote[];
   totalBeats?: number;
   emptyMessage?: string;
+  aiCaveat?: boolean;
+  aiCaveatLabel?: string;
 };
 
 export function SheetViewer({
@@ -279,6 +281,8 @@ export function SheetViewer({
   notes,
   totalBeats,
   emptyMessage,
+  aiCaveat,
+  aiCaveatLabel,
 }: SheetViewerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [vw, setVw] = useState(720);
@@ -313,7 +317,7 @@ export function SheetViewer({
   const View = view === 'tab' ? TabView : view === 'roll' ? RollView : StaffView;
 
   return (
-    <div className={`sheet${waiting ? ' waiting-part' : ''}`}>
+    <div className={`sheet${waiting ? ' waiting-part' : ''}${aiCaveat ? ' score-ai-caveat' : ''}`}>
       <div className="sheet-scroll" ref={wrapRef} style={{ height: SHEET_H }}>
         {loading && (
           <div className="sheet-loading">
@@ -338,6 +342,11 @@ export function SheetViewer({
         <div className="sheet-cursor" style={{ left: cursorX }} />
         {waiting && !loading && !isEmpty && (
           <div className="sheet-wait-overlay"><span>{waitLabel}</span></div>
+        )}
+        {aiCaveat && !loading && !isEmpty && (
+          <div className="sheet-ai-overlay" aria-hidden="true">
+            <span className="sheet-ai-watermark">{aiCaveatLabel}</span>
+          </div>
         )}
       </div>
     </div>

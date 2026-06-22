@@ -3,7 +3,8 @@ import { createSilentWavBuffer } from '@/lib/audio/wav-placeholder';
 import { CATALOG_INSTRUMENTS } from '@/types/catalog';
 import { SCORE, type InstrumentKey } from '@/lib/data';
 import { INSTRUMENT_QUALITY } from '@/lib/score-quality';
-import { uploadStemWav, userStemPath } from '@/lib/supabase/user-song-storage';
+import { downloadPendingMidi, uploadStemWav, userStemPath } from '@/lib/supabase/user-song-storage';
+import { convertAndStoreMidiNotes } from '@/lib/songs/user-midi-upload';
 
 const STEMS_TTL_MS = 48 * 60 * 60 * 1000;
 const CATALOG_SET = new Set<string>(CATALOG_INSTRUMENTS);
@@ -77,7 +78,7 @@ async function runMockProcessor(
 
     const { data: songRow, error: songErr } = await admin
       .from('songs')
-      .select('instruments')
+      .select('instruments, pending_midi_path, pending_midi_instrument')
       .eq('id', songId)
       .single();
 
@@ -101,6 +102,9 @@ async function runMockProcessor(
     );
     const placeholderWav = createSilentWavBuffer(mockDurationSecs);
     const detected: InstrumentKey[] = [];
+    // User already supplied a MIDI for this instrument at upload time — Basic Pitch
+    // must not transcribe it; the pending-MIDI conversion below replaces this entirely.
+    const skipBasicPitchFor = songRow?.pending_midi_path ? songRow.pending_midi_instrument : null;
 
     for (const instrument of toProcess) {
       const storagePath = options.stemPath(songId, instrument);
@@ -120,21 +124,23 @@ async function runMockProcessor(
 
         if (stemErr) throw stemErr;
 
-        const notes = buildNotesForInstrument(instrument, mockBpm);
-        const { error: noteErr } = await admin.from('note_sequences').insert({
-          song_id: songId,
-          stem_id: stem.id,
-          instrument_type: instrument,
-          notes,
-          tab_data: instrument === 'guitar' || instrument === 'bass'
-            ? notes.map((n) => n.tab).filter(Boolean)
-            : null,
-          key_signature: keySig,
-          source: 'ai_basic_pitch',
-          confidence_avg: 1,
-        });
+        if (instrument !== skipBasicPitchFor) {
+          const notes = buildNotesForInstrument(instrument, mockBpm);
+          const { error: noteErr } = await admin.from('note_sequences').insert({
+            song_id: songId,
+            stem_id: stem.id,
+            instrument_type: instrument,
+            notes,
+            tab_data: instrument === 'guitar' || instrument === 'bass'
+              ? notes.map((n) => n.tab).filter(Boolean)
+              : null,
+            key_signature: keySig,
+            source: 'ai_basic_pitch',
+            confidence_avg: 1,
+          });
 
-        if (noteErr) throw noteErr;
+          if (noteErr) throw noteErr;
+        }
         detected.push(instrument);
       } catch {
         /* skip instruments that failed to upload */
@@ -159,6 +165,26 @@ async function runMockProcessor(
       progress_pct: 100,
       completed_at: new Date().toISOString(),
     }).eq('id', jobId);
+
+    if (songRow?.pending_midi_path && songRow?.pending_midi_instrument) {
+      try {
+        const midiBuffer = await downloadPendingMidi(songRow.pending_midi_path);
+        await convertAndStoreMidiNotes(
+          admin,
+          songId,
+          songRow.pending_midi_instrument as InstrumentKey,
+          midiBuffer,
+          mockBpm,
+        );
+      } catch {
+        /* MIDI conversion is a best-effort follow-up; the AI score remains available */
+      } finally {
+        await admin.from('songs').update({
+          pending_midi_path: null,
+          pending_midi_instrument: null,
+        }).eq('id', songId);
+      }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Processing failed';
     await markFailed(message);

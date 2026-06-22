@@ -1,10 +1,13 @@
 import { createClient } from '@/lib/supabase/client';
+import { midiDurationFromNotes } from '@/lib/midi/score-sync';
 import { staffPos, midiToTab, type InstrumentKey, type ScoreNote } from '@/lib/data';
 
 export type SongScore = {
   notes: ScoreNote[];
   totalBeats: number;
   fromDb: boolean;
+  source?: string | null;
+  midiDurationSec?: number | null;
 };
 
 function asScoreNote(raw: unknown, bpm = 120): ScoreNote | null {
@@ -58,9 +61,9 @@ function asScoreNote(raw: unknown, bpm = 120): ScoreNote | null {
   };
 }
 
-export function buildScoreFromNotes(rawNotes: unknown, bpm = 120): SongScore {
+export function buildScoreFromNotes(rawNotes: unknown, bpm = 120, source?: string | null): SongScore {
   if (!Array.isArray(rawNotes) || rawNotes.length === 0) {
-    return { notes: [], totalBeats: 0, fromDb: false };
+    return { notes: [], totalBeats: 0, fromDb: false, source: source ?? null, midiDurationSec: null };
   }
 
   const notes = rawNotes
@@ -69,11 +72,20 @@ export function buildScoreFromNotes(rawNotes: unknown, bpm = 120): SongScore {
     .sort((a, b) => a.beat - b.beat);
 
   if (!notes.length) {
-    return { notes: [], totalBeats: 0, fromDb: false };
+    return { notes: [], totalBeats: 0, fromDb: false, source: source ?? null, midiDurationSec: null };
   }
 
+  const resolvedSource = source ?? notes.find((n) => n.source)?.source ?? null;
   const totalBeats = notes.reduce((max, n) => Math.max(max, n.beat + n.dur), 0);
-  return { notes, totalBeats: Math.max(totalBeats, 1), fromDb: true };
+  const midiDurationSec = resolvedSource === 'user_upload' ? midiDurationFromNotes(notes, bpm) : null;
+
+  return {
+    notes,
+    totalBeats: Math.max(totalBeats, 1),
+    fromDb: true,
+    source: resolvedSource,
+    midiDurationSec,
+  };
 }
 
 export async function fetchSongScore(
@@ -86,17 +98,17 @@ export async function fetchSongScore(
   async function loadFor(inst: InstrumentKey) {
     const { data } = await supabase
       .from('note_sequences')
-      .select('notes')
+      .select('notes, source')
       .eq('song_id', songId)
       .eq('instrument_type', inst)
       .maybeSingle();
-    return data?.notes ?? null;
+    return data ?? null;
   }
 
-  let raw = await loadFor(instrument);
-  if (!raw && instrument !== 'guitar') {
-    raw = await loadFor('guitar');
+  let row = await loadFor(instrument);
+  if (!row && instrument !== 'guitar') {
+    row = await loadFor('guitar');
   }
 
-  return buildScoreFromNotes(raw, bpm);
+  return buildScoreFromNotes(row?.notes ?? null, bpm, row?.source ?? null);
 }

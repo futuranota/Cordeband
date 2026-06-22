@@ -210,6 +210,35 @@
   background:var(--acc); border-color:var(--acc); color:var(--acc-ink);
 }
 .instrument-picker-chip:disabled{ opacity:.55; cursor:not-allowed; }
+.instrument-picker-grid{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(168px, 1fr)); gap:10px;
+}
+.instrument-picker-item{
+  display:flex; flex-direction:column; align-items:stretch; gap:6px;
+  padding:10px; border-radius:var(--radius-sm); border:1px solid var(--line);
+  background:var(--elev-2);
+}
+.instrument-picker-item.on{ border-color:var(--acc-line); background:var(--acc-soft); }
+.instrument-picker-item .instrument-picker-chip{
+  width:100%; justify-content:flex-start; border:none; background:transparent; padding:0;
+  color:inherit;
+}
+.instrument-picker-item.on .instrument-picker-chip.on{
+  background:transparent; border:none; color:inherit;
+}
+.instrument-picker-item-label{ font-weight:700; }
+.instrument-quality-tag{
+  font-size:11px; font-weight:700; letter-spacing:.02em; color:var(--text-3);
+}
+.instrument-picker-item.on .instrument-quality-tag{ color:var(--text-2); }
+.instrument-quality-tag.quality-bass{ color:var(--acc); }
+.instrument-quality-tag.quality-drums{ color:var(--text-4); }
+.instrument-klang-btn{
+  width:100%; justify-content:center; opacity:.55; font-size:11px; padding:4px 8px;
+}
+.instrument-ai-disclaimer{
+  font-size:13.5px; line-height:1.5; margin:16px 0 0; max-width:62ch;
+}
 .inst-ico{
   width:72px; height:72px; border-radius:18px; display:grid; place-items:center;
   background:var(--surface); border:1px solid var(--line); color:var(--text-2);
@@ -347,6 +376,18 @@
   position:relative; overflow:hidden; box-shadow:var(--shadow);
 }
 .sheet.waiting-part{ opacity:.5; }
+.sheet.score-ai-caveat .sheet-track{ opacity:.88; }
+.sheet-ai-overlay{
+  position:absolute; inset:0; z-index:7; pointer-events:none;
+  background:linear-gradient(135deg, rgba(12,12,12,.18), rgba(12,12,12,.42));
+  -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.sheet-ai-watermark{
+  font-family:var(--display); font-weight:800; font-size:clamp(28px,6vw,52px);
+  letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.07);
+  transform:rotate(-18deg); user-select:none; white-space:nowrap;
+}
 .sheet-wait-overlay{
   position:absolute; inset:0; z-index:8; display:flex; align-items:center; justify-content:center;
   background:rgba(10,10,10,.55); -webkit-backdrop-filter:blur(1px); backdrop-filter:blur(1px);
@@ -413,6 +454,15 @@
 }
 .score-source-badge.empty{
   color:var(--text-4); background:var(--elev-2);
+}
+.score-source-badge.trusted{
+  color:#6ee7a8; background:rgba(46,125,94,.14); border-color:rgba(110,231,168,.28);
+}
+.score-source-badge.uncertain{
+  color:#f0c674; background:rgba(180,130,40,.12); border-color:rgba(240,198,116,.25);
+}
+.player-score-disclaimer{
+  font-size:13.5px; line-height:1.5; margin:-4px 0 12px; max-width:72ch;
 }
 
 .solo-practice-timeline{
@@ -598,6 +648,18 @@
 .modal-cap--danger{ background:rgba(248,113,113,.18); color:#fca5a5; border:1px solid rgba(248,113,113,.35); }
 .confirm-modal{ max-width:440px; }
 .confirm-modal-actions{ margin-top:24px; flex-wrap:wrap; justify-content:flex-end; }
+.midi-terms-check{
+  display:flex; align-items:flex-start; gap:10px; margin-top:18px;
+  font-size:13.5px; line-height:1.5; color:var(--text-2); cursor:pointer;
+}
+.midi-terms-check input{ margin-top:3px; accent-color:var(--acc); flex-shrink:0; }
+.legal-page{ padding:32px 20px 64px; max-width:800px; margin:0 auto; }
+.legal-page-inner{ padding:28px 24px 32px; }
+.legal-bullets{
+  margin:20px 0 0; padding-left:1.2rem; color:var(--text-2);
+  font-size:14.5px; line-height:1.65;
+}
+.legal-bullets li{ margin-bottom:10px; }
 .confirm-summary{
   width:100%; border-collapse:collapse; margin-top:18px;
   border:1px solid var(--line); border-radius:12px; overflow:hidden;

@@ -21,6 +21,8 @@ type AlphaTabViewerProps = {
   waiting?: boolean;
   waitLabel?: string;
   fallback?: ReactNode;
+  aiCaveat?: boolean;
+  aiCaveatLabel?: string;
 };
 
 export function AlphaTabViewer({
@@ -30,6 +32,8 @@ export function AlphaTabViewer({
   waiting,
   waitLabel,
   fallback,
+  aiCaveat,
+  aiCaveatLabel,
 }: AlphaTabViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<AlphaTabApi | null>(null);
@@ -90,7 +94,7 @@ export function AlphaTabViewer({
   if (failed) return fallback ? <>{fallback}</> : null;
 
   return (
-    <div className={`sheet alphatab-sheet${waiting ? ' waiting-part' : ''}`} style={{ height: SHEET_H }}>
+    <div className={`sheet alphatab-sheet${waiting ? ' waiting-part' : ''}${aiCaveat ? ' score-ai-caveat' : ''}`} style={{ height: SHEET_H }}>
       <div
         ref={containerRef}
         className="alphatab-container"
@@ -105,6 +109,11 @@ export function AlphaTabViewer({
       )}
       {waiting && !loading && waitLabel && (
         <div className="sheet-wait-overlay"><span>{waitLabel}</span></div>
+      )}
+      {aiCaveat && !loading && (
+        <div className="sheet-ai-overlay" aria-hidden="true">
+          <span className="sheet-ai-watermark">{aiCaveatLabel}</span>
+        </div>
       )}
     </div>
   );

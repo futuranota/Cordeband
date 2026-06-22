@@ -33,7 +33,7 @@ export async function dispatchSongProcessing(
     const admin = createAdminClient();
     const { data: song } = await admin
       .from('songs')
-      .select('instruments')
+      .select('instruments, pending_midi_instrument')
       .eq('id', songId)
       .single();
 
@@ -53,6 +53,10 @@ export async function dispatchSongProcessing(
           storage_path: storagePath,
           job_id: jobId,
           instrument_hint: song?.instruments ?? [],
+          // Instrument the user already supplied a MIDI for at upload time.
+          // The processor must still separate this stem, but must skip Basic Pitch
+          // transcription for it — the MIDI replaces that note source entirely.
+          skip_transcription_for: song?.pending_midi_instrument ?? null,
         }),
       });
     } catch (err) {

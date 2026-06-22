@@ -12,6 +12,7 @@ type ConfirmDialogProps = {
   cancelLabel: string;
   loading?: boolean;
   danger?: boolean;
+  confirmDisabled?: boolean;
   icon?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
@@ -26,6 +27,7 @@ export function ConfirmDialog({
   cancelLabel,
   loading = false,
   danger = false,
+  confirmDisabled = false,
   icon,
   onConfirm,
   onCancel,
@@ -89,6 +91,7 @@ export function ConfirmDialog({
             variant={danger ? 'destructive' : 'default'}
             size="sm"
             loading={loading}
+            disabled={confirmDisabled || loading}
             onClick={onConfirm}
           >
             {confirmLabel}
