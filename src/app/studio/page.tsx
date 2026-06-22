@@ -2,6 +2,8 @@ import { StudioSection } from '@/components/studio/StudioSection';
 import { getProfile } from '@/lib/supabase/profile';
 import { createClient } from '@/lib/supabase/server';
 
+export const dynamic = 'force-dynamic';
+
 export default async function StudioPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
