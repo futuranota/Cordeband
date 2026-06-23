@@ -6,6 +6,33 @@ import tempfile
 import wave
 from pathlib import Path
 from callbacks import notify_callback
+
+
+def _ensure_demucs_ready() -> None:
+    """Verify Demucs is installed and model is available."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "demucs", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        print(f"[demucs-check] Version: {result.stdout}", flush=True)
+    except Exception as exc:
+        raise RuntimeError(f"Demucs not available: {exc}") from exc
+
+    try:
+        subprocess.run(
+            [sys.executable, "-c", "import demucs.pretrained; demucs.pretrained.get_model('htdemucs_6s')"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        print("[demucs-check] Model htdemucs_6s is available", flush=True)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Demucs model download timed out")
+    except Exception as exc:
+        raise RuntimeError(f"Could not load Demucs model: {exc}") from exc
 from config import (
     DEFAULT_BPM,
     DEMUCS_STEMS,
@@ -55,7 +82,7 @@ def _estimate_bpm(path: Path) -> int:
 def _run_demucs(input_path: Path, out_dir: Path) -> Path:
     python_bin = sys.executable
     try:
-        subprocess.run(
+        result = subprocess.run(
             [
                 python_bin,
                 "-m",
@@ -70,19 +97,34 @@ def _run_demucs(input_path: Path, out_dir: Path) -> Path:
             capture_output=True,
             text=True,
         )
+        print(f"[demucs] stdout: {result.stdout}", flush=True)
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or "").strip()
+        print(f"[demucs] stderr: {exc.stderr}", flush=True)
+        print(f"[demucs] stdout: {exc.stdout}", flush=True)
         raise RuntimeError(
             f"Demucs failed (exit {exc.returncode})"
             + (f": {detail[-500:]}" if detail else "")
         ) from exc
 
-    stem_dirs = list((out_dir / "htdemucs_6s").glob("*"))
+    demucs_base = out_dir / "htdemucs_6s"
+    if not demucs_base.exists():
+        print(f"[demucs] htdemucs_6s dir not found at {demucs_base}", flush=True)
+        print(f"[demucs] Contents of {out_dir}: {list(out_dir.glob('*'))}", flush=True)
+        raise RuntimeError(f"Demucs output directory not found at {demucs_base}")
+
+    stem_dirs = list(demucs_base.glob("*"))
     if not stem_dirs:
-        raise RuntimeError("Demucs produced no output directory")
+        raise RuntimeError(f"Demucs produced no subdirectories in {demucs_base}")
+
     stem_dir = stem_dirs[0]
-    if not any(stem_dir.glob("*.wav")):
-        raise RuntimeError("Demucs produced no WAV files")
+    wav_files = list(stem_dir.glob("*.wav"))
+    if not wav_files:
+        print(f"[demucs] No WAV files in {stem_dir}", flush=True)
+        print(f"[demucs] Directory contents: {list(stem_dir.glob('*'))}", flush=True)
+        raise RuntimeError(f"Demucs produced no WAV files in {stem_dir}")
+
+    print(f"[demucs] Found {len(wav_files)} WAV files in {stem_dir}", flush=True)
     return stem_dir
 
 
@@ -94,21 +136,33 @@ def _stem_storage_path(song_id: str, instrument: str, is_featured: bool) -> str:
 
 def _all_demucs_stems(demucs_dir: Path) -> list[str]:
     """All stems Demucs produced (htdemucs_6s → up to 6 WAV files)."""
-    return [inst for inst in DEMUCS_STEMS if (demucs_dir / f"{inst}.wav").exists()]
+    available_stems = [inst for inst in DEMUCS_STEMS if (demucs_dir / f"{inst}.wav").exists()]
+    print(f"[stems] Expected stems: {DEMUCS_STEMS}", flush=True)
+    print(f"[stems] Found stems: {available_stems}", flush=True)
+    print(f"[stems] Directory contents: {list(demucs_dir.glob('*.wav'))}", flush=True)
+    return available_stems
 
 
 def _convert_to_mp3(wav_path: Path, mp3_path: Path) -> Path:
-    subprocess.run(
-        [
-            "ffmpeg", "-y",
-            "-i", str(wav_path),
-            "-codec:a", "libmp3lame",
-            "-b:a", "128k",
-            str(mp3_path),
-        ],
-        check=True,
-        capture_output=True,
-    )
+    if not wav_path.exists():
+        raise RuntimeError(f"WAV file does not exist: {wav_path}")
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", str(wav_path),
+                "-codec:a", "libmp3lame",
+                "-b:a", "128k",
+                str(mp3_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print(f"[ffmpeg] Converted {wav_path.name} → {mp3_path.name}", flush=True)
+    except subprocess.CalledProcessError as exc:
+        print(f"[ffmpeg] Failed to convert {wav_path.name}: {exc.stderr}", flush=True)
+        raise RuntimeError(f"FFmpeg conversion failed: {exc.stderr}") from exc
     return mp3_path
 
 
@@ -125,6 +179,8 @@ def process_song(
     client = get_client()
 
     try:
+        _ensure_demucs_ready()
+
         song = fetch_song(client, song_id)
         is_featured = bool(song.get("is_featured"))
         update_job(client, job_id, status="processing", progress_pct=PROGRESS_STEPS[0], started=True)
