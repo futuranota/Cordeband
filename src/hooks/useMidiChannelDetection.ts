@@ -18,18 +18,6 @@ export function useMidiChannelDetection() {
       const buffer = await file.arrayBuffer();
       const result = detectMidiChannels(buffer, instrument);
       setDetection(result);
-
-      // Auto-select the detected track if not ambiguous
-      if (result.selectedTrack && !result.isAmbiguous) {
-        const trackIndex = result.allTracks.findIndex(
-          (t) => t.noteCount > 0 && result.selectedTrack &&
-                 t.index === result.allTracks.findIndex((track) =>
-                   track.noteCount === result.selectedTrack.notes?.length)
-        );
-        if (trackIndex >= 0) {
-          setSelectedChannel(trackIndex);
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to detect MIDI channels');
     } finally {
