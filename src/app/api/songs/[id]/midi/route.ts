@@ -19,6 +19,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const file = form.get('file');
   const instrumentRaw = form.get('instrument');
+  const channelRaw = form.get('channel');
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'MIDI file is required' }, { status: 400 });
@@ -29,6 +30,8 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Invalid instrument' }, { status: 400 });
   }
 
+  const channel = typeof channelRaw === 'string' ? parseInt(channelRaw, 10) : undefined;
+
   const buffer = await file.arrayBuffer();
   const result = await uploadUserMidiScore({
     songId,
@@ -36,6 +39,7 @@ export async function POST(request: Request, { params }: Params) {
     fileName: file.name,
     fileSize: file.size,
     buffer,
+    channel,
   });
 
   if ('error' in result) {

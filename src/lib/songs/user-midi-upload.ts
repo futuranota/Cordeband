@@ -12,6 +12,7 @@ export type UserMidiUploadInput = {
   fileName: string;
   fileSize: number;
   buffer: ArrayBuffer;
+  channel?: number;
 };
 
 // Shared by the direct-upload path (song already ready, real bpm known) and by
@@ -23,8 +24,9 @@ export async function convertAndStoreMidiNotes(
   instrument: InstrumentKey,
   buffer: ArrayBuffer,
   bpm: number,
+  channel?: number,
 ) {
-  const notes = parseMidiBufferToScoreNotes(buffer, bpm, instrument);
+  const notes = parseMidiBufferToScoreNotes(buffer, bpm, instrument, channel);
   if (!notes.length) {
     return { error: 'No notes found in MIDI file', status: 400 as const };
   }
@@ -121,7 +123,7 @@ export async function uploadUserMidiScore(input: UserMidiUploadInput) {
   const bpm = Number(song.bpm) > 0 ? Number(song.bpm) : 120;
 
   try {
-    return await convertAndStoreMidiNotes(admin, input.songId, input.instrument, input.buffer, bpm);
+    return await convertAndStoreMidiNotes(admin, input.songId, input.instrument, input.buffer, bpm, input.channel);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid MIDI file';
     return { error: message, status: 400 as const };

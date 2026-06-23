@@ -6,8 +6,10 @@ import { useT } from '@/i18n/context';
 import { createClient } from '@/lib/supabase/client';
 import { DetectedInstrumentsBanner } from '@/components/instruments/DetectedInstrumentsBanner';
 import { InstrumentPicker } from '@/components/instruments/InstrumentPicker';
+import { MidiChannelSelector } from '@/components/instruments/MidiChannelSelector';
 import { MidiUploadTermsDialog } from '@/components/player/MidiUploadTermsDialog';
 import { hasAcceptedMidiUploadTerms } from '@/lib/midi-upload-terms';
+import { useMidiChannelDetection } from '@/hooks/useMidiChannelDetection';
 import type { InstrumentKey } from '@/lib/data';
 import type { InstrumentDetectionMode } from '@/lib/instrument-detection';
 import { instrumentBannerKeys } from '@/lib/instrument-detection';
@@ -26,15 +28,20 @@ function MidiAttach({
   midiFile,
   onMidiChange,
   disabled,
+  instruments,
+  onChannelSelect,
 }: {
   midiFile: File | null;
   onMidiChange: (file: File | null) => void;
   disabled?: boolean;
+  instruments: InstrumentKey[];
+  onChannelSelect?: (channel: number | null) => void;
 }) {
   const { t } = useT();
   const [error, setError] = useState<string | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { detection, selectedChannel, setSelectedChannel, detectChannels } = useMidiChannelDetection();
 
   function handleFile(file: File | undefined) {
     if (!file) return;
@@ -44,6 +51,16 @@ function MidiAttach({
       return;
     }
     onMidiChange(file);
+    onChannelSelect?.(null);
+    // Detect channels if instruments are selected
+    if (instruments.length > 0) {
+      void detectChannels(file, instruments[0]);
+    }
+  }
+
+  function handleChannelSelect(channel: number) {
+    setSelectedChannel(channel);
+    onChannelSelect?.(channel);
   }
 
   function openPicker() {
@@ -55,41 +72,52 @@ function MidiAttach({
   }
 
   return (
-    <div className="card" style={{ marginBottom: 24, padding: 20, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
-      <label className="field-label">{t('up.midiLabel')}</label>
-      <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>{t('up.midiHint')}</p>
-      {midiFile ? (
-        <div className="row spread">
-          <span style={{ fontSize: 13.5 }}>{t('up.midiSelected')} {midiFile.name}</span>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={() => onMidiChange(null)}>
-            {t('up.midiRemove')}
+    <>
+      <div className="card" style={{ marginBottom: 24, padding: 20, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
+        <label className="field-label">{t('up.midiLabel')}</label>
+        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>{t('up.midiHint')}</p>
+        {midiFile ? (
+          <div className="row spread">
+            <span style={{ fontSize: 13.5 }}>{t('up.midiSelected')} {midiFile.name}</span>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={() => { onMidiChange(null); }}>
+              {t('up.midiRemove')}
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={openPicker}>
+            <IconUpload size={14} /> {t('up.midiAttach')}
           </button>
-        </div>
-      ) : (
-        <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={openPicker}>
-          <IconUpload size={14} /> {t('up.midiAttach')}
-        </button>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".mid,.midi,audio/midi"
+          hidden
+          disabled={disabled}
+          onChange={(e) => handleFile(e.target.files?.[0])}
+        />
+        {error && (
+          <p style={{ color: '#ef4444', fontSize: 13, margin: '10px 0 0' }}>{error}</p>
+        )}
+        <MidiUploadTermsDialog
+          open={termsOpen}
+          onCancel={() => setTermsOpen(false)}
+          onAccepted={() => {
+            setTermsOpen(false);
+            inputRef.current?.click();
+          }}
+        />
+      </div>
+
+      {detection && (
+        <MidiChannelSelector
+          detection={detection}
+          selectedChannel={selectedChannel}
+          onChannelSelect={handleChannelSelect}
+          disabled={disabled}
+        />
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".mid,.midi,audio/midi"
-        hidden
-        disabled={disabled}
-        onChange={(e) => handleFile(e.target.files?.[0])}
-      />
-      {error && (
-        <p style={{ color: '#ef4444', fontSize: 13, margin: '10px 0 0' }}>{error}</p>
-      )}
-      <MidiUploadTermsDialog
-        open={termsOpen}
-        onCancel={() => setTermsOpen(false)}
-        onAccepted={() => {
-          setTermsOpen(false);
-          inputRef.current?.click();
-        }}
-      />
-    </div>
+    </>
   );
 }
 
@@ -101,6 +129,7 @@ function Dropzone({
   instrumentError,
   midiFile,
   onMidiChange,
+  onMidiChannelSelect,
   fromStudio,
 }: {
   onPick: (file: File) => void;
@@ -110,6 +139,7 @@ function Dropzone({
   instrumentError: string | null;
   midiFile: File | null;
   onMidiChange: (file: File | null) => void;
+  onMidiChannelSelect?: (channel: number | null) => void;
   fromStudio?: boolean;
 }) {
   const { t } = useT();
@@ -151,7 +181,13 @@ function Dropzone({
         />
       </div>
 
-      <MidiAttach midiFile={midiFile} onMidiChange={onMidiChange} disabled={disabled} />
+      <MidiAttach
+        midiFile={midiFile}
+        onMidiChange={onMidiChange}
+        disabled={disabled}
+        instruments={instruments}
+        onChannelSelect={onMidiChannelSelect}
+      />
 
       <div
         className={`dropzone${drag ? ' drag' : ''}${disabled ? ' disabled' : ''}`}
@@ -380,6 +416,7 @@ export function UploadScreen() {
   const [instruments, setInstruments] = useState<InstrumentKey[]>(['guitar']);
   const [instrumentError, setInstrumentError] = useState<string | null>(null);
   const [midiFile, setMidiFile] = useState<File | null>(null);
+  const [midiSelectedChannel, setMidiSelectedChannel] = useState<number | null>(null);
   const [midiWarning, setMidiWarning] = useState<string | null>(null);
 
   useEffect(() => {
@@ -445,6 +482,9 @@ export function UploadScreen() {
           const midiForm = new FormData();
           midiForm.append('file', midiFile);
           midiForm.append('instrument', instruments[0]);
+          if (midiSelectedChannel !== null) {
+            midiForm.append('channel', midiSelectedChannel.toString());
+          }
           const midiRes = await fetch(`/api/songs/${createdSongId}/midi`, { method: 'POST', body: midiForm });
           if (!midiRes.ok) {
             setMidiWarning(t('up.midiUploadFailed'));
@@ -540,6 +580,7 @@ export function UploadScreen() {
       instrumentError={instrumentError}
       midiFile={midiFile}
       onMidiChange={setMidiFile}
+      onMidiChannelSelect={setMidiSelectedChannel}
       fromStudio={fromStudio}
     />
   );

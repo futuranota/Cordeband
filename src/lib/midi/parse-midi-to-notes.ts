@@ -55,18 +55,54 @@ function analyzeChannelMetrics(track: any): ChannelMetrics {
   };
 }
 
-function selectBestChannel(midi: any, instrument: InstrumentKey): any | null {
+export interface ChannelSelectionResult {
+  selectedTrack: any | null;
+  allTracks: Array<{ index: number; noteCount: number; range: string }>;
+  isAmbiguous: boolean;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+function selectBestChannel(midi: any, instrument: InstrumentKey): ChannelSelectionResult {
   const tracks = midi.tracks.filter((t: any) => t.notes && t.notes.length > 0);
 
-  if (tracks.length === 0) return null;
-  if (tracks.length === 1) return tracks[0];
+  if (tracks.length === 0) {
+    return {
+      selectedTrack: null,
+      allTracks: [],
+      isAmbiguous: false,
+      confidence: 'low',
+    };
+  }
+
+  const allTracksInfo = midi.tracks.map((t: any, idx: number) => {
+    const metrics = analyzeChannelMetrics(t);
+    return {
+      index: idx,
+      noteCount: metrics.noteCount,
+      range: metrics.noteCount > 0 ? `${metrics.min}-${metrics.max}` : 'empty',
+    };
+  });
+
+  if (tracks.length === 1) {
+    return {
+      selectedTrack: tracks[0],
+      allTracks: allTracksInfo,
+      isAmbiguous: false,
+      confidence: 'high',
+    };
+  }
 
   // Step 1: Try canonical channel
   const canonicalChannel = CANONICAL_CHANNELS[instrument];
   if (canonicalChannel !== null && canonicalChannel < midi.tracks.length) {
     const canonicalTrack = midi.tracks[canonicalChannel];
     if (canonicalTrack && canonicalTrack.notes && canonicalTrack.notes.length > 0) {
-      return canonicalTrack;
+      return {
+        selectedTrack: canonicalTrack,
+        allTracks: allTracksInfo,
+        isAmbiguous: false,
+        confidence: 'high',
+      };
     }
   }
 
@@ -74,6 +110,7 @@ function selectBestChannel(midi: any, instrument: InstrumentKey): any | null {
   const instrumentRange = INSTRUMENT_RANGES[instrument];
   let bestTrack = null;
   let bestScore = -Infinity;
+  let secondScore = -Infinity;
 
   for (const track of tracks) {
     const metrics = analyzeChannelMetrics(track);
@@ -97,12 +134,25 @@ function selectBestChannel(midi: any, instrument: InstrumentKey): any | null {
     score += Math.min(metrics.noteCount / 100, 20);
 
     if (score > bestScore) {
+      secondScore = bestScore;
       bestScore = score;
       bestTrack = track;
+    } else if (score > secondScore) {
+      secondScore = score;
     }
   }
 
-  return bestTrack || tracks[0];
+  // Determine confidence: if best and second are too close, it's ambiguous
+  const scoreGap = bestScore - secondScore;
+  const isAmbiguous = scoreGap < 30 && tracks.length >= 2;
+  const confidence = bestScore >= 100 ? 'high' : isAmbiguous ? 'low' : 'medium';
+
+  return {
+    selectedTrack: bestTrack || tracks[0],
+    allTracks: allTracksInfo,
+    isAmbiguous,
+    confidence,
+  };
 }
 
 function midiToBassTab(midi: number): { string: number; fret: number } {
@@ -119,10 +169,23 @@ export function isMidiFileName(name: string): boolean {
   return /\.midi?$/i.test(name.trim());
 }
 
+export function detectMidiChannels(
+  buffer: ArrayBuffer,
+  instrument: InstrumentKey,
+): ChannelSelectionResult {
+  if (buffer.byteLength > MAX_MIDI_BYTES) {
+    throw new Error('MIDI file exceeds 2 MB limit');
+  }
+
+  const midi = new Midi(buffer);
+  return selectBestChannel(midi, instrument);
+}
+
 export function parseMidiBufferToScoreNotes(
   buffer: ArrayBuffer,
   bpm: number,
   instrument: InstrumentKey,
+  channelIndex?: number,
 ): ScoreNote[] {
   if (buffer.byteLength > MAX_MIDI_BYTES) {
     throw new Error('MIDI file exceeds 2 MB limit');
@@ -131,8 +194,18 @@ export function parseMidiBufferToScoreNotes(
   const midi = new Midi(buffer);
   const notes: ScoreNote[] = [];
 
-  // Auto-detect the best channel for the selected instrument
-  const selectedTrack = selectBestChannel(midi, instrument);
+  // Auto-detect the best channel for the selected instrument, or use specified channel
+  const detection = selectBestChannel(midi, instrument);
+  let selectedTrack = detection.selectedTrack;
+
+  // If user specified a channel, use that instead
+  if (channelIndex !== undefined && channelIndex >= 0 && channelIndex < midi.tracks.length) {
+    const userTrack = midi.tracks[channelIndex];
+    if (userTrack && userTrack.notes && userTrack.notes.length > 0) {
+      selectedTrack = userTrack;
+    }
+  }
+
   if (!selectedTrack || !selectedTrack.notes || selectedTrack.notes.length === 0) {
     return notes;
   }
