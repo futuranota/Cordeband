@@ -40,6 +40,14 @@ export function MidiPreviewScreen({ onPreviewReady, onCancel }: Props) {
       return;
     }
 
+    // Check if channel selection is needed and if it's been made
+    if (detection?.isAmbiguous && detection.allTracks.filter((t) => t.noteCount > 0).length > 1) {
+      if (selectedChannel === null) {
+        setError('Please select a channel above');
+        return;
+      }
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -151,7 +159,12 @@ export function MidiPreviewScreen({ onPreviewReady, onCancel }: Props) {
         <button
           type="button"
           className="btn btn-primary btn-lg"
-          disabled={!midiFile || isLoading || isDetecting}
+          disabled={
+            !midiFile ||
+            isLoading ||
+            isDetecting ||
+            (detection?.isAmbiguous && detection.allTracks.filter((t) => t.noteCount > 0).length > 1 && selectedChannel === null)
+          }
           onClick={handleRead}
         >
           {isLoading ? (
