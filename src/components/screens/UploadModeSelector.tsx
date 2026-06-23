@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { useT } from '@/i18n/context';
 import { UploadScreen } from './UploadScreen';
 import { MidiPreviewScreen } from './MidiPreviewScreen';
+import { MidiPreviewPlayer } from './MidiPreviewPlayer';
 import type { InstrumentKey } from '@/lib/data';
 import { IconUpload } from '@/components/ui/icons';
 
-type Mode = 'select' | 'preview' | 'full-upload';
+type Mode = 'select' | 'preview' | 'player' | 'full-upload';
 
 type UploadModeProps = {
   fromStudio?: boolean;
@@ -22,13 +23,26 @@ export function UploadModeSelector({ fromStudio }: UploadModeProps) {
     selectedChannel: number | null;
   } | null>(null);
 
+  if (mode === 'player' && previewData) {
+    return (
+      <MidiPreviewPlayer
+        midiBuffer={previewData.midiBuffer}
+        instrument={previewData.instrument}
+        selectedChannel={previewData.selectedChannel}
+        onClose={() => {
+          setMode('select');
+          setPreviewData(null);
+        }}
+      />
+    );
+  }
+
   if (mode === 'preview') {
     return (
       <MidiPreviewScreen
         onPreviewReady={(midiBuffer, instrument, selectedChannel) => {
           setPreviewData({ midiBuffer, instrument, selectedChannel });
-          // TODO: Navigate to preview panel with MIDI data
-          console.log('Preview ready:', { midiBuffer, instrument, selectedChannel });
+          setMode('player');
         }}
         onCancel={() => setMode('select')}
       />

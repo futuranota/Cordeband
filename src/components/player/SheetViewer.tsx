@@ -26,6 +26,17 @@ function barBeats(scoreTotal: number): number[] {
   return bars;
 }
 
+// ── Playhead Cursor Component ────────────────────────────────────────────────
+
+function PlayheadCursor({ cursorX }: { cursorX: number }) {
+  return (
+    <div className="playhead-cursor" style={{ left: `${cursorX}px` }}>
+      <div className="playhead-marker" />
+      <div className="playhead-line" />
+    </div>
+  );
+}
+
 // ── Helpers de activación — usan curTimeSec si existe, beats como fallback ──
 
 function resolveActive(
@@ -78,9 +89,17 @@ function StaffView({
       {[0, 1, 2, 3, 4].map((i) => (
         <line key={i} x1={LEFT - 14} x2={totalWidth - 40} y1={STAFF_TOP + i * GAP} y2={STAFF_TOP + i * GAP} stroke={C_LINE} strokeWidth="1" />
       ))}
-      {bars.map((b) => (
-        <line key={b} x1={xAt(b)} x2={xAt(b)} y1={STAFF_TOP} y2={STAFF_TOP + 4 * GAP} stroke={C_LINE} strokeWidth="1" />
-      ))}
+      {bars.map((b) => {
+        const measure = Math.floor(b / 4) + 1;
+        return (
+          <g key={b}>
+            <line x1={xAt(b)} x2={xAt(b)} y1={STAFF_TOP} y2={STAFF_TOP + 4 * GAP} stroke={C_LINE} strokeWidth="1" />
+            <text x={xAt(b)} y={STAFF_TOP - 20} fontSize="10" fill="rgba(128,128,128,0.6)" textAnchor="middle">
+              {measure}
+            </text>
+          </g>
+        );
+      })}
       {notes.map((n, i) => {
         const x = xAt(n.beat);
         const y = yAt(n.s);
@@ -151,9 +170,17 @@ function TabView({
       {[0, 1, 2, 3, 4, 5].map((s) => (
         <line key={s} x1={LEFT - 14} x2={totalWidth - 40} y1={yStr(s)} y2={yStr(s)} stroke={C_LINE} strokeWidth="1" />
       ))}
-      {bars.map((b) => (
-        <line key={b} x1={xAt(b)} x2={xAt(b)} y1={yStr(0)} y2={yStr(5)} stroke={C_LINE} strokeWidth="1" />
-      ))}
+      {bars.map((b) => {
+        const measure = Math.floor(b / 4) + 1;
+        return (
+          <g key={b}>
+            <line x1={xAt(b)} x2={xAt(b)} y1={yStr(0)} y2={yStr(5)} stroke={C_LINE} strokeWidth="1" />
+            <text x={xAt(b)} y={STAFF_TOP - 20} fontSize="10" fill="rgba(128,128,128,0.6)" textAnchor="middle">
+              {measure}
+            </text>
+          </g>
+        );
+      })}
       {notes.map((n, i) => {
         const x = xAt(n.beat);
         const y = yStr(n.tab.string);
@@ -207,9 +234,17 @@ function RollView({
           {m % 12 === 0 && <rect x={LEFT - 14} y={yMidi(m)} width={totalWidth - LEFT - 26} height={laneH} fill="rgba(255,255,255,0.03)" />}
         </g>
       ))}
-      {bars.map((b) => (
-        <line key={b} x1={xAt(b)} x2={xAt(b)} y1={rTop} y2={yMidi(lo) + laneH} stroke={C_LINE_2} strokeWidth="1" />
-      ))}
+      {bars.map((b) => {
+        const measure = Math.floor(b / 4) + 1;
+        return (
+          <g key={b}>
+            <line x1={xAt(b)} x2={xAt(b)} y1={rTop} y2={yMidi(lo) + laneH} stroke={C_LINE_2} strokeWidth="1" />
+            <text x={xAt(b)} y={STAFF_TOP - 20} fontSize="10" fill="rgba(128,128,128,0.6)" textAnchor="middle">
+              {measure}
+            </text>
+          </g>
+        );
+      })}
       {notes.map((n, i) => {
         const x = xAt(n.beat);
         const y = yMidi(n.midi);
@@ -340,6 +375,7 @@ export function SheetViewer({
         <LeftPanel view={view} />
         <div className="sheet-fade-r" />
         <div className="sheet-cursor" style={{ left: cursorX }} />
+        <PlayheadCursor cursorX={cursorX} />
         {waiting && !loading && !isEmpty && (
           <div className="sheet-wait-overlay"><span>{waitLabel}</span></div>
         )}
