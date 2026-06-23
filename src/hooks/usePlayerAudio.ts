@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { InstrumentKey } from '@/lib/data';
 import { fetchSongStems } from '@/lib/supabase/fetch-song-stems';
+import { fetchSongOriginal } from '@/lib/supabase/fetch-song-original';
 import { usePlayerStore } from '@/stores/playerStore';
+
+export const ORIGINAL_TRACK_KEY = 'original';
 
 export const STEM_DEF_VOL: Record<string, number> = {
   vocals: 78, drums: 82, bass: 80, piano: 70, guitar: 76, other: 64,
+  [ORIGINAL_TRACK_KEY]: 100,
 };
 
 export type UsePlayerAudioOptions = {
@@ -70,8 +74,8 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
   } = usePlayerStore();
 
   const ctxRef = useRef<AudioContext | null>(null);
-  const buffersRef = useRef<Map<InstrumentKey, AudioBuffer>>(new Map());
-  const gainsRef = useRef<Map<InstrumentKey, GainNode>>(new Map());
+  const buffersRef = useRef<Map<string, AudioBuffer>>(new Map());
+  const gainsRef = useRef<Map<string, GainNode>>(new Map());
   const sourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const playStartCtxRef = useRef(0);
   const startBeatRef = useRef(0);
@@ -80,7 +84,7 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
   optsRef.current = opts;
   const playbackLimitRef = useRef(1);
   const [playbackLimit, setPlaybackLimit] = useState(1);
-  const [loadedStems, setLoadedStems] = useState<InstrumentKey[]>([]);
+  const [loadedStems, setLoadedStems] = useState<string[]>([]);
 
   // NUEVO: ref para curTimeSec — evita re-render extra, lo leemos en el tick
   const curTimeSecRef = useRef(0);
@@ -235,7 +239,10 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
 
     void (async () => {
       try {
-        const stems = await fetchSongStems(opts.songId!);
+        const [stems, original] = await Promise.all([
+          fetchSongStems(opts.songId!).catch(() => []),
+          fetchSongOriginal(opts.songId!),
+        ]);
         if (cancelled) return;
 
         const ctx = new AudioContext();
@@ -247,9 +254,26 @@ export function usePlayerAudio(opts: UsePlayerAudioOptions) {
             if (!res.ok) throw new Error(`Failed to fetch stem ${s.instrument}`);
             const ab = await res.arrayBuffer();
             const buffer = await ctx.decodeAudioData(ab);
-            return { instrument: s.instrument, buffer };
+            return { instrument: s.instrument as string, buffer };
           }),
         );
+
+        if (original) {
+          try {
+            const res = await fetch(original.signedUrl);
+            if (res.ok) {
+              const ab = await res.arrayBuffer();
+              const buffer = await ctx.decodeAudioData(ab);
+              decoded.push({ instrument: ORIGINAL_TRACK_KEY, buffer });
+            }
+          } catch {
+            /* original mix is optional — playback continues with separated stems */
+          }
+        }
+
+        if (decoded.length === 0) {
+          throw new Error('No audio available for this song');
+        }
 
         if (cancelled) {
           safeCloseAudioContext(ctx);

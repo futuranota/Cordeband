@@ -46,7 +46,7 @@ import { useBandTurnOverlay } from '@/hooks/useBandTurnOverlay';
 import { useBandRoom } from '@/hooks/useBandRoom';
 import { useBandSync } from '@/hooks/useBandSync';
 import { useBandAudioFollow } from '@/hooks/useBandAudioFollow';
-import { usePlayerAudio, STEM_DEF_VOL } from '@/hooks/usePlayerAudio';
+import { usePlayerAudio, STEM_DEF_VOL, ORIGINAL_TRACK_KEY } from '@/hooks/usePlayerAudio';
 import { notesToAlphaTex } from '@/lib/alphatab/notes-to-alphatex';
 import {
   buildDemoBandRoom,
@@ -501,10 +501,15 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
   const total = useRealAudio ? audio.playbackLimitBeats : fallbackTotal;
 
+  const loadedInstrumentStems = useMemo(
+    () => audio.loadedStems.filter((s) => s !== ORIGINAL_TRACK_KEY) as InstrumentKey[],
+    [audio.loadedStems],
+  );
+
   const displayInstruments = useMemo(() => {
-    if (useRealAudio && audio.loadedStems.length) return audio.loadedStems;
+    if (useRealAudio && loadedInstrumentStems.length) return loadedInstrumentStems;
     return S.instruments;
-  }, [useRealAudio, audio.loadedStems, S.instruments]);
+  }, [useRealAudio, loadedInstrumentStems, S.instruments]);
 
   const soloPlaying = useRealAudio ? audio.playing : playing;
   const soloCurBeat = useRealAudio ? audio.curBeat : curBeat;
@@ -579,9 +584,9 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
   }, [user, profile?.city, profile?.postal_code]);
 
   useEffect(() => {
-    if (!useRealAudio || !audio.loadedStems.length) return;
-    setVols(buildDefaultVols(instrument, audio.loadedStems));
-  }, [useRealAudio, instrument, audio.loadedStems.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!useRealAudio || !loadedInstrumentStems.length) return;
+    setVols(buildDefaultVols(instrument, loadedInstrumentStems));
+  }, [useRealAudio, instrument, loadedInstrumentStems.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isDemo) {
