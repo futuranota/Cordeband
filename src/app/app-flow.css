@@ -399,6 +399,9 @@
 .sheet-track{ position:absolute; top:0; left:0; height:100%; will-change:transform; }
 .sheet-cursor{ position:absolute; top:0; bottom:0; width:2px; background:var(--acc); z-index:5; pointer-events:none; }
 .sheet-cursor::before{ content:""; position:absolute; top:-1px; left:-4px; width:10px; height:10px; border-radius:999px; background:var(--acc); }
+.playhead-cursor{ position:fixed; top:0; width:2px; height:100%; pointer-events:none; z-index:20; }
+.playhead-marker{ width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid #ffffff; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+.playhead-line{ width:2px; height:calc(100% - 8px); background:#ffffff; margin-top:8px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
 .sheet-fade-l, .sheet-fade-r{ position:absolute; top:0; bottom:0; width:48px; z-index:4; pointer-events:none; }
 .sheet-fade-l{ left:0; background:linear-gradient(90deg, #0d0d0d, transparent); }
 .sheet-fade-r{ right:0; background:linear-gradient(270deg, #0d0d0d, transparent); }
