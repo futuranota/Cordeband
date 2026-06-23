@@ -142,6 +142,22 @@ export function activeInstrumentsAt(
   });
 }
 
+/**
+ * Which instruments are "on stage" at `curBeat`, derived from real per-instrument
+ * beat windows (e.g. from transcribed notes) instead of fixed fraction-of-song schedule.
+ */
+export function activeInstrumentsFromWindows(
+  curBeat: number,
+  windowsByInstrument: Partial<Record<InstrumentKey, readonly EntryWindow[]>>,
+  presentInstruments: readonly InstrumentKey[],
+): InstrumentKey[] {
+  return presentInstruments.filter((key) => {
+    const windows = windowsByInstrument[key];
+    if (!windows?.length) return false;
+    return isBeatInWindows(curBeat, windows);
+  });
+}
+
 export function nextEntryFor(
   instrument: InstrumentKey,
   curBeat: number,

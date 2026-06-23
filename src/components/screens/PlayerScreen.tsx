@@ -10,7 +10,7 @@ import {
   INSTRUMENTS, type InstrumentKey, type Song, type AffiliateProduct,
 } from '@/lib/data';
 import { fetchSongById, readActiveSongId, readInstrumentConfirmedFor, saveActiveSongId, saveInstrumentConfirmedFor } from '@/lib/supabase/fetch-song';
-import { fetchSongScore, type SongScore } from '@/lib/supabase/fetch-song-score';
+import { fetchSongScore, fetchAllSongScores, type SongScore } from '@/lib/supabase/fetch-song-score';
 import { DEMO_BAND_MEMBERS } from '@/lib/demo-band';
 import { toUiBandMember, memberDisplayName, viewerMember } from '@/lib/band-room';
 import {
@@ -20,11 +20,15 @@ import {
 } from '@/lib/plan-access';
 import {
   activeInstrumentsAt,
+  activeInstrumentsFromWindows,
   DEMO_ENTRY_SCHEDULE_FRACTIONS,
   DEMO_YOUR_PART_FRACTIONS,
   fractionsToBeatWindows,
   LEAD_BEATS_DEFAULT,
   viewerPartStatus,
+  type EntryScheduleFractions,
+  type EntryWindow,
+  type FractionWindow,
 } from '@/lib/band-schedule';
 import { isYourTurnAt, windowsFromNotes } from '@/lib/note-turn-schedule';
 import { normalizePlan } from '@/lib/supabase/profile';
@@ -511,6 +515,46 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     return S.instruments;
   }, [useRealAudio, loadedInstrumentStems, S.instruments]);
 
+  // Real "who's playing" data for band view, derived from this song's actual
+  // transcribed notes instead of the fixed demo entry schedule — so the turn
+  // banner reflects this song, not a hardcoded rotation.
+  const isRealBandSong = isBandView && !isDemo;
+  const [bandScores, setBandScores] = useState<Partial<Record<InstrumentKey, SongScore>>>({});
+
+  useEffect(() => {
+    if (!isRealBandSong || !resolvedSongId || !displayInstruments.length) {
+      setBandScores({});
+      return;
+    }
+    let cancelled = false;
+    void fetchAllSongScores(resolvedSongId, displayInstruments, song?.bpm || 120).then((scores) => {
+      if (!cancelled) setBandScores(scores);
+    });
+    return () => { cancelled = true; };
+  }, [isRealBandSong, resolvedSongId, displayInstruments.join(','), song?.bpm]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const bandWindowsByInstrument = useMemo(() => {
+    const out: Partial<Record<InstrumentKey, EntryWindow[]>> = {};
+    for (const key of Object.keys(bandScores) as InstrumentKey[]) {
+      const notes = bandScores[key]?.notes ?? [];
+      if (notes.length) out[key] = windowsFromNotes(notes, { gapBeats: 2, padBeats: 0.25 });
+    }
+    return out;
+  }, [bandScores]);
+
+  const useBandRealTurns = isRealBandSong && Object.keys(bandWindowsByInstrument).length > 0;
+
+  const realScheduleFractions = useMemo<EntryScheduleFractions | undefined>(() => {
+    if (!useBandRealTurns || total <= 0) return undefined;
+    const out: EntryScheduleFractions = {};
+    for (const key of Object.keys(bandWindowsByInstrument) as InstrumentKey[]) {
+      const windows = bandWindowsByInstrument[key];
+      if (!windows?.length) continue;
+      out[key] = windows.map((w) => [w.startBeat / total, w.endBeat / total] as FractionWindow);
+    }
+    return out;
+  }, [useBandRealTurns, bandWindowsByInstrument, total]);
+
   const soloPlaying = useRealAudio ? audio.playing : playing;
   const soloCurBeat = useRealAudio ? audio.curBeat : curBeat;
   const soloCurTimeSec = useRealAudio ? audio.curTimeSec : curBeat * 60 / bpm;
@@ -658,17 +702,21 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     if (useScoreTurns) {
       return windowsFromNotes(score.notes, { gapBeats: 2, padBeats: 0.25 });
     }
+    if (useBandRealTurns) {
+      return bandWindowsByInstrument[instrument] ?? [];
+    }
     if (useDemoTurns) {
       return fractionsToBeatWindows(DEMO_YOUR_PART_FRACTIONS, total);
     }
     return [];
-  }, [useScoreTurns, score.notes, useDemoTurns, total]);
+  }, [useScoreTurns, score.notes, useBandRealTurns, bandWindowsByInstrument, instrument, useDemoTurns, total]);
   const viewerWindows = useMemo(() => {
+    if (useBandRealTurns) return bandWindowsByInstrument[instrument] ?? [];
     if (!useDemoTurns) return [];
     if (!isBandView) return yourWindows;
     const fractions = DEMO_ENTRY_SCHEDULE_FRACTIONS[instrument] ?? [];
     return fractionsToBeatWindows(fractions, total);
-  }, [useDemoTurns, isBandView, instrument, total, yourWindows]);
+  }, [useBandRealTurns, bandWindowsByInstrument, useDemoTurns, isBandView, instrument, total, yourWindows]);
   const partWindows = isBandView ? viewerWindows : yourWindows;
   const beatRef = useRef(0);
   const loopRef = useRef(loop);
@@ -805,6 +853,9 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     if (useScoreTurns) {
       return isYourTurnAt(beat, yourWindows) ? [inst] : [];
     }
+    if (useBandRealTurns) {
+      return activeInstrumentsFromWindows(beat, bandWindowsByInstrument, displayInstruments);
+    }
     if (isBandView) {
       return activeInstrumentsAt(beat, total, DEMO_ENTRY_SCHEDULE_FRACTIONS, displayInstruments);
     }
@@ -816,6 +867,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     effectivePlaying,
     syncReady,
     useScoreTurns,
+    useBandRealTurns,
+    bandWindowsByInstrument,
     isBandView,
     effectiveCurBeat,
     soloCurBeat,
@@ -908,6 +961,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
       yourTime,
     },
     presentInstruments: S.instruments,
+    scheduleFractions: realScheduleFractions,
   });
 
   const seek = (clientX: number) => {
@@ -1350,8 +1404,8 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
             {useRealAudio && audio.audioError && (
               <div className="card" style={{ marginBottom: 12, borderColor: 'var(--warn, #e8a838)' }}>
                 <p style={{ margin: 0, fontSize: 13.5 }}>{audio.audioError}</p>
-                {audio.audioError.toLowerCase().includes('expired') && (
-                  <Link href="/upload" className="btn btn-primary btn-sm" style={{ marginTop: 10 }}>
+                {audio.audioError.toLowerCase().includes('expired') && resolvedSongId && (
+                  <Link href={`/reactivate/${resolvedSongId}`} className="btn btn-primary btn-sm" style={{ marginTop: 10 }}>
                     {t('dash.reactivate')}
                   </Link>
                 )}

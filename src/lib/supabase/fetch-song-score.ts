@@ -112,3 +112,26 @@ export async function fetchSongScore(
 
   return buildScoreFromNotes(row?.notes ?? null, bpm, row?.source ?? null);
 }
+
+/** Fetch transcribed notes for several instruments of the same song in one query. */
+export async function fetchAllSongScores(
+  songId: string,
+  instruments: readonly InstrumentKey[],
+  bpm = 120,
+): Promise<Partial<Record<InstrumentKey, SongScore>>> {
+  if (!instruments.length) return {};
+  const supabase = createClient();
+
+  const { data } = await supabase
+    .from('note_sequences')
+    .select('instrument_type, notes, source')
+    .eq('song_id', songId)
+    .in('instrument_type', instruments as InstrumentKey[]);
+
+  const out: Partial<Record<InstrumentKey, SongScore>> = {};
+  for (const row of data ?? []) {
+    const inst = row.instrument_type as InstrumentKey;
+    out[inst] = buildScoreFromNotes(row.notes, bpm, row.source);
+  }
+  return out;
+}

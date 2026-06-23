@@ -244,7 +244,7 @@ function parseInstruments(raw: unknown): InstrumentKey[] {
   return raw.filter((k): k is InstrumentKey => typeof k === 'string');
 }
 
-function ProcessingStatus({
+export function ProcessingStatus({
   fileName,
   songId,
   midiWarning,
