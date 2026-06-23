@@ -48,6 +48,7 @@ export function MidiPreviewScreen({ onPreviewReady, onCancel }: Props) {
       onPreviewReady(buffer, selectedInstrument, selectedChannel);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to read MIDI file');
+    } finally {
       setIsLoading(false);
     }
   }
