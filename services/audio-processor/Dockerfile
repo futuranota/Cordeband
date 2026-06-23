@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Pre-download Demucs model (~400MB) so first job does not timeout
 RUN python -m demucs --help && python -c "import demucs.pretrained; demucs.pretrained.get_model('htdemucs_6s')"
 
-COPY config.py callbacks.py stem_energy.py supabase_client.py notes_converter.py transcription.py worker.py main.py .
+COPY callbacks.py config.py stem_energy.py supabase_client.py notes_converter.py transcription.py worker.py main.py .
 
 ENV PORT=8080
 EXPOSE 8080
