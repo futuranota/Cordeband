@@ -14,7 +14,7 @@ function parsePlan(value: string | null): PlanId | null {
 }
 
 export async function GET(request: Request) {
-  const { error } = await requireAdmin();
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const { searchParams } = new URL(request.url);

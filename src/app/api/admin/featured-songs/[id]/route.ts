@@ -8,7 +8,7 @@ import type { CatalogSongRow } from '@/types/catalog';
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Params) {
-  const { error } = await requireAdmin();
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const { id } = await params;
@@ -63,8 +63,8 @@ export async function PATCH(request: Request, { params }: Params) {
   return NextResponse.json({ song: mapCatalogRowToSong(data as CatalogSongRow) });
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
-  const { error } = await requireAdmin();
+export async function DELETE(request: Request, { params }: Params) {
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const { id } = await params;

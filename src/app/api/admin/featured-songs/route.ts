@@ -5,18 +5,20 @@ import { ADMIN_CATALOG_SELECT, mapCatalogRowToSong } from '@/lib/supabase/catalo
 import { extFromName, uploadFeaturedFile } from '@/lib/supabase/featured-storage';
 import { dispatchSongProcessing } from '@/lib/audio-processor';
 import { parseInstrumentsFromForm } from '@/lib/parse-instruments';
+import {
+  MAX_FEATURED_AUDIO_BYTES,
+  MAX_IMAGE_BYTES,
+  validateUpload,
+} from '@/lib/upload-validation';
 import type { CatalogSongRow } from '@/types/catalog';
-
-const AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/x-flac'];
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 function pickGlyph(title: string): string {
   const glyphs = ['♪', '♫', '♬', '♩'];
   return glyphs[title.charCodeAt(0) % glyphs.length];
 }
 
-export async function GET() {
-  const { error } = await requireAdmin();
+export async function GET(request: Request) {
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const admin = createAdminClient();
@@ -35,7 +37,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { error } = await requireAdmin();
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   let form: FormData;
@@ -58,11 +60,21 @@ export async function POST(request: Request) {
   if (!(audio instanceof File) || audio.size === 0) {
     return NextResponse.json({ error: 'Audio file is required' }, { status: 400 });
   }
-  if (audio.type && !AUDIO_TYPES.includes(audio.type) && !audio.name.match(/\.(mp3|wav|flac)$/i)) {
-    return NextResponse.json({ error: 'Unsupported audio format' }, { status: 400 });
+  const audioCheck = await validateUpload(audio, {
+    kind: 'audio',
+    maxBytes: MAX_FEATURED_AUDIO_BYTES,
+  });
+  if (!audioCheck.ok) {
+    return NextResponse.json({ error: audioCheck.error }, { status: audioCheck.status });
   }
-  if (cover instanceof File && cover.size > 0 && cover.type && !IMAGE_TYPES.includes(cover.type)) {
-    return NextResponse.json({ error: 'Unsupported cover image' }, { status: 400 });
+  if (cover instanceof File && cover.size > 0) {
+    const coverCheck = await validateUpload(cover, {
+      kind: 'image',
+      maxBytes: MAX_IMAGE_BYTES,
+    });
+    if (!coverCheck.ok) {
+      return NextResponse.json({ error: coverCheck.error }, { status: coverCheck.status });
+    }
   }
 
   const instruments = parseInstrumentsFromForm(form);

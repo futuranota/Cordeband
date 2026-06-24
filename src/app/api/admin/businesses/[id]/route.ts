@@ -6,14 +6,13 @@ import {
   removeBusinessBanner,
   uploadBusinessBanner,
 } from '@/lib/supabase/business-storage';
+import { MAX_IMAGE_BYTES, validateUpload } from '@/lib/upload-validation';
 import type { LocalBusiness } from '@/types/database';
-
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const { error } = await requireAdmin();
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const { id } = await context.params;
@@ -68,8 +67,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     if (banner instanceof File && banner.size > 0) {
-      if (banner.type && !IMAGE_TYPES.includes(banner.type)) {
-        return NextResponse.json({ error: 'Unsupported banner image' }, { status: 400 });
+      const bannerCheck = await validateUpload(banner, {
+        kind: 'image',
+        maxBytes: MAX_IMAGE_BYTES,
+      });
+      if (!bannerCheck.ok) {
+        return NextResponse.json({ error: bannerCheck.error }, { status: bannerCheck.status });
       }
       try {
         await removeBusinessBanner(bannerPathFromUrl(existing.banner_url));
@@ -116,8 +119,8 @@ export async function PATCH(request: Request, context: RouteContext) {
   return NextResponse.json({ business: data as LocalBusiness });
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
-  const { error } = await requireAdmin();
+export async function DELETE(request: Request, context: RouteContext) {
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const { id } = await context.params;

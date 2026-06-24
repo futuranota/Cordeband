@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { uploadBusinessBanner } from '@/lib/supabase/business-storage';
+import { MAX_IMAGE_BYTES, validateUpload } from '@/lib/upload-validation';
 import type { LocalBusiness } from '@/types/database';
 
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-
-export async function GET() {
-  const { error } = await requireAdmin();
+export async function GET(request: Request) {
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const admin = createAdminClient();
@@ -25,7 +24,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { error } = await requireAdmin();
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   let form: FormData;
@@ -54,8 +53,14 @@ export async function POST(request: Request) {
   if (!city) {
     return NextResponse.json({ error: 'City is required' }, { status: 400 });
   }
-  if (banner instanceof File && banner.size > 0 && banner.type && !IMAGE_TYPES.includes(banner.type)) {
-    return NextResponse.json({ error: 'Unsupported banner image' }, { status: 400 });
+  if (banner instanceof File && banner.size > 0) {
+    const bannerCheck = await validateUpload(banner, {
+      kind: 'image',
+      maxBytes: MAX_IMAGE_BYTES,
+    });
+    if (!bannerCheck.ok) {
+      return NextResponse.json({ error: bannerCheck.error }, { status: bannerCheck.status });
+    }
   }
 
   const admin = createAdminClient();

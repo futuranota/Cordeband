@@ -5,8 +5,8 @@ import { runMockFeaturedProcessor } from '@/lib/mock-audio-processor';
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function POST(_request: Request, { params }: Params) {
-  const { error } = await requireAdmin();
+export async function POST(request: Request, { params }: Params) {
+  const { error } = await requireAdmin(request);
   if (error) return error;
 
   const { id: songId } = await params;
