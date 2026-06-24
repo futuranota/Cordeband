@@ -754,6 +754,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
     && shouldShowAiCaveat(inst, score.notes);
   const aiCaveatLabel = t('scoreQuality.aiWatermark');
   const isFullMidiScore = score.source === 'user_upload';
+  const displayTitle = isFullMidiScore && S.midi_filename ? S.midi_filename : S.title;
   const audioDurationSec = S.duration > 0 ? S.duration : total * 60 / bpm;
 
   const soloScoreClock = useMemo(
@@ -1185,7 +1186,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
 
               <div className="player-head">
                 <div className="now-playing">
-                  <div className="np-title">{S.title}</div>
+                  <div className="np-title">{displayTitle}</div>
                   <div className="np-meta">
                     <span>{S.artist}</span><span style={{ opacity: 0.4 }}>·</span>
                     {ownStemMuted && (
@@ -1216,6 +1217,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                   instrument={inst}
                   noteCount={inst === 'vocals' ? yourWindows.length : score.notes.length}
                   notes={score.notes}
+                  midiFilename={S.midi_filename}
                 />
               </div>
 
@@ -1294,7 +1296,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
           <section className="stage">
             <div className="player-head">
               <div className="now-playing">
-                <div className="np-title">{S.title}</div>
+                <div className="np-title">{displayTitle}</div>
                 <div className="np-meta">
                   <span>{S.artist}</span><span style={{ opacity: 0.4 }}>·</span>
                   {ownStemMuted && (
@@ -1322,6 +1324,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
                 instrument={inst}
                 noteCount={inst === 'vocals' ? yourWindows.length : score.notes.length}
                 notes={score.notes}
+                midiFilename={S.midi_filename}
               />
               {!soloPlaying && (score.notes.length > 0 || yourWindows.length > 0) && (
                 <span className="player-play-hint muted">{t('player.playToAnimate')}</span>

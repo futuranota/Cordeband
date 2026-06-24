@@ -10,7 +10,7 @@ const LEFT = 92;
 const RIGHT = 220;
 const STAFF_TOP = 78;
 const GAP = 13;
-const SHEET_H = 230;
+const SHEET_H = 500;
 
 const C_LINE = 'rgba(255,255,255,0.13)';
 const C_LINE_2 = 'rgba(255,255,255,0.07)';
@@ -336,7 +336,7 @@ export function SheetViewer({
   const isEmpty = scoreNotes.length === 0;
   const displayTotal = isEmpty ? Math.max(scoreTotal, 16) : scoreTotal;
   const totalWidth = xAt(displayTotal) + RIGHT;
-  const cursorX = Math.max(150, Math.min(340, vw * 0.30));
+  const cursorX = Math.max(200, Math.min(500, vw * 0.50));
   const translate = cursorX - xAt(curBeat);
 
   // NUEVO: props comunes a todos los sub-views
