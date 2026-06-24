@@ -41,6 +41,7 @@ export type Song = {
   isAiGenerated?: boolean;
   description?: string;
   status?: string;
+  midi_filename?: string | null;
 };
 
 const NOW = Date.now();

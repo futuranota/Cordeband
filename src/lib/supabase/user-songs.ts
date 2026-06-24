@@ -14,6 +14,7 @@ export type UserSongRow = {
   stems_expires_at: string | null;
   added_this_month: boolean;
   created_at: string;
+  midi_filename?: string | null;
 };
 
 export function formatSongAddedLabel(createdAt: string, locale: 'es' | 'en' = 'es'): string {
@@ -43,8 +44,9 @@ export function mapUserSongRowToSong(row: UserSongRow, locale: 'es' | 'en' = 'es
     stemsExpiresAt: row.stems_expires_at ? new Date(row.stems_expires_at).getTime() : null,
     addedThisMonth: row.added_this_month,
     status: row.status,
+    midi_filename: row.midi_filename,
   };
 }
 
 export const USER_SONG_SELECT =
-  'id, title, artist, glyph, duration_seconds, bpm, key_signature, instruments, status, stems_expires_at, added_this_month, created_at';
+  'id, title, artist, glyph, duration_seconds, bpm, key_signature, instruments, status, stems_expires_at, added_this_month, created_at, midi_filename';

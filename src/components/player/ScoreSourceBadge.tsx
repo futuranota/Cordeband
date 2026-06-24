@@ -14,6 +14,7 @@ type ScoreSourceBadgeProps = {
   instrument: InstrumentKey;
   noteCount?: number;
   notes?: readonly Pick<ScoreNote, 'quality' | 'confidence' | 'source'>[];
+  midiFilename?: string | null;
 };
 
 export function ScoreSourceBadge({
@@ -22,6 +23,7 @@ export function ScoreSourceBadge({
   instrument,
   noteCount = 0,
   notes = [],
+  midiFilename,
 }: ScoreSourceBadgeProps) {
   const { t } = useT();
 
@@ -46,9 +48,12 @@ export function ScoreSourceBadge({
     const isUserMidi = notes.some((n) => n.source === 'user_upload');
 
     if (isUserMidi) {
+      const label = midiFilename
+        ? `📋 ${midiFilename}`
+        : t('player.scoreUserMidi');
       return (
         <span className="score-source-badge uncertain" title={t('player.scoreUserMidiHint')}>
-          {t('player.scoreUserMidi')}
+          {label}
         </span>
       );
     }

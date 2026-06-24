@@ -110,7 +110,11 @@ export async function uploadUserMidiScore(input: UserMidiUploadInput) {
 
     const { error: updateErr } = await admin
       .from('songs')
-      .update({ pending_midi_path: path, pending_midi_instrument: input.instrument })
+      .update({
+        pending_midi_path: path,
+        pending_midi_instrument: input.instrument,
+        midi_filename: input.fileName,
+      })
       .eq('id', input.songId);
 
     if (updateErr) {
@@ -123,7 +127,18 @@ export async function uploadUserMidiScore(input: UserMidiUploadInput) {
   const bpm = Number(song.bpm) > 0 ? Number(song.bpm) : 120;
 
   try {
-    return await convertAndStoreMidiNotes(admin, input.songId, input.instrument, input.buffer, bpm, input.channel);
+    const result = await convertAndStoreMidiNotes(admin, input.songId, input.instrument, input.buffer, bpm, input.channel);
+    if ('error' in result) {
+      return result;
+    }
+
+    // Store the MIDI filename
+    await admin
+      .from('songs')
+      .update({ midi_filename: input.fileName })
+      .eq('id', input.songId);
+
+    return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid MIDI file';
     return { error: message, status: 400 as const };
