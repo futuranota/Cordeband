@@ -1142,6 +1142,7 @@ function PlayerScreenInner({ initialDemoMode }: { initialDemoMode: PlayerViewMod
           <AlphaTabViewer
             alphaTex={alphaTex}
             curBeat={curBeatVal}
+            mode={isFullMidiScore ? 'klangio' : 'compact'}
             loading={sheetProps.loading}
             waiting={sheetProps.waiting}
             waitLabel={sheetProps.waitLabel}

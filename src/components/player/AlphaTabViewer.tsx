@@ -6,7 +6,7 @@ import { DARK_ALPHATAB_RESOURCES } from '@/lib/alphatab/dark-theme-resources';
 import { IconSpark } from '@/components/ui/icons';
 
 const FONT_CDN = 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.8.3/dist/font/';
-const SHEET_H = 230;
+const COMPACT_H = 230;
 
 type AlphaTabApi = {
   tex: (tex: string) => void;
@@ -14,9 +14,12 @@ type AlphaTabApi = {
   destroy: () => void;
 };
 
+export type AlphaTabViewMode = 'compact' | 'klangio';
+
 type AlphaTabViewerProps = {
   alphaTex: string;
   curBeat: number;
+  mode?: AlphaTabViewMode;
   loading?: boolean;
   waiting?: boolean;
   waitLabel?: string;
@@ -28,6 +31,7 @@ type AlphaTabViewerProps = {
 export function AlphaTabViewer({
   alphaTex,
   curBeat,
+  mode = 'compact',
   loading,
   waiting,
   waitLabel,
@@ -35,6 +39,7 @@ export function AlphaTabViewer({
   aiCaveat,
   aiCaveatLabel,
 }: AlphaTabViewerProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<AlphaTabApi | null>(null);
   const [ready, setReady] = useState(false);
@@ -64,7 +69,7 @@ export function AlphaTabViewer({
             enableUserInteraction: false,
           },
           display: {
-            scale: 0.9,
+            scale: mode === 'klangio' ? 1.0 : 0.9,
             layoutMode: 'page',
             resources: DARK_ALPHATAB_RESOURCES,
           },
@@ -83,22 +88,42 @@ export function AlphaTabViewer({
       api?.destroy();
       apiRef.current = null;
     };
-  }, [alphaTex]);
+  }, [alphaTex, mode]);
 
   useEffect(() => {
     const api = apiRef.current;
     if (!api || !ready) return;
     api.tickPosition = beatToTickPosition(curBeat);
-  }, [curBeat, ready]);
+    if (mode !== 'klangio') return;
+    // Auto-scroll the cursor into view for Klangio-style vertical playback.
+    const wrap = wrapRef.current;
+    const cursorEl = wrap?.querySelector('.at-cursor-beat') as HTMLElement | null;
+    if (wrap && cursorEl) {
+      const wrapRect = wrap.getBoundingClientRect();
+      const cursorRect = cursorEl.getBoundingClientRect();
+      const offsetWithinWrap = cursorRect.top - wrapRect.top + wrap.scrollTop;
+      const target = offsetWithinWrap - wrap.clientHeight * 0.35;
+      wrap.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+    }
+  }, [curBeat, ready, mode]);
 
   if (failed) return fallback ? <>{fallback}</> : null;
 
+  const isKlangio = mode === 'klangio';
+  const wrapClass = `sheet alphatab-sheet${isKlangio ? ' alphatab-klangio' : ''}${waiting ? ' waiting-part' : ''}${aiCaveat ? ' score-ai-caveat' : ''}`;
+  const wrapStyle = isKlangio
+    ? { maxHeight: '70vh', overflowY: 'auto' as const }
+    : { height: COMPACT_H };
+  const innerStyle = isKlangio
+    ? { width: '100%' }
+    : { width: '100%', height: COMPACT_H, overflow: 'hidden' as const };
+
   return (
-    <div className={`sheet alphatab-sheet${waiting ? ' waiting-part' : ''}${aiCaveat ? ' score-ai-caveat' : ''}`} style={{ height: SHEET_H }}>
+    <div ref={wrapRef} className={wrapClass} style={wrapStyle}>
       <div
         ref={containerRef}
         className="alphatab-container"
-        style={{ width: '100%', height: SHEET_H, overflow: 'hidden' }}
+        style={innerStyle}
       />
       {loading && (
         <div className="sheet-loading">
@@ -110,7 +135,7 @@ export function AlphaTabViewer({
       {waiting && !loading && waitLabel && (
         <div className="sheet-wait-overlay"><span>{waitLabel}</span></div>
       )}
-      {aiCaveat && !loading && (
+      {aiCaveat && !loading && !isKlangio && (
         <div className="sheet-ai-overlay" aria-hidden="true">
           <span className="sheet-ai-watermark">{aiCaveatLabel}</span>
         </div>
